@@ -1,0 +1,17 @@
+{
+  "name": "fake-entity-service",
+  "version": "0.1.0",
+  "description": "A fake entity service",
+  "scripts": {
+    "build": "tsc --sourceMap",
+    "version": "echo $npm_package_version"
+  },
+  "devDependencies": {
+    "typescript": "^4.7.4",
+    "sequelize-typescript": "^2.1.5"
+  },
+  "files": [
+    "src/",
+    "dist/"
+  ]
+}
