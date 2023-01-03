@@ -1,0 +1,1 @@
+export {SequelizeFakeEntityService} from './sequelize-fake-entity.service';
