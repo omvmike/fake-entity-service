@@ -1,6 +1,6 @@
 {
   "name": "fake-entity-service",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A fake database entities service for testing",
   "author": {
     "email": "mike.onofrienko@clockwise.software",
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc --sourceMap",
-    "test": "jest --coverage",
+    "test": "jest --coverage --detectOpenHandles",
     "version": "echo $npm_package_version",
     "migrate": "npx sequelize-cli db:migrate --env=local",
     "seed": "npx sequelize-cli db:seed:all --env=local"

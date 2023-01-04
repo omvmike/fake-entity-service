@@ -23,7 +23,7 @@ Thumbs.db
 changelog/
 sequelize/
 coverage/
-src/tests/
+src/tests/**/*.ts
 docker/
 docker-compose.yml
 tag-deploy.sh
