@@ -25,6 +25,10 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     await fakeUserService.cleanup();
   });
 
+  afterAll(async () => {
+    await PostgresDataSource.destroy();
+  });
+
   it('should create user', async () => {
     const user = await fakeUserService.create();
     expect(user).toBeDefined();
