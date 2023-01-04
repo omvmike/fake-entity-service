@@ -3,7 +3,7 @@
 This is a fake entity service that can be used for testing purposes.
 The aim is simplify database data generation for integration and end-to-end tests.
 
-This library is inspired by Laravel's [factory](https://laravel.com/docs/8.x/database-testing#introduction) functionality.
+This library is inspired by Laravel's [factory](https://laravel.com/docs/8.x/database-testing#introduction).
 
 ### Installation
 
@@ -13,7 +13,7 @@ npm i --save-dev fake-entity-service
 
 ## Usage
 
-Target ORMs are Sequelize and TypeORM. So you need to import one of the libraries as root.
+Target ORMs are Sequelize and TypeORM. So you need to import one of the libraries:
 
 ```typescript
 import { SequelizeFakeEntityService } from 'fake-entity-service';
