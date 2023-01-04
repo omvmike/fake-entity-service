@@ -1,6 +1,9 @@
-import {Model} from "sequelize-typescript";
+import {DeepPartial, FindOneOptions, Repository} from "typeorm";
+import {DeleteResult} from "typeorm/query-builder/result/DeleteResult";
 
-export class SequelizeFakeEntityService<TEntity extends Model> {
+
+
+export class TypeormFakeEntityService<TEntity> {
 
   public entityIds = [];
   public idFieldName = 'id';
@@ -8,7 +11,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   protected states?: Partial<TEntity>;
 
   protected nestedEntities: {
-    service: SequelizeFakeEntityService<Model>,
+    service: TypeormFakeEntityService<any>,
     count: number,
     customFields?: any,
     relationFields: {
@@ -20,10 +23,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     }[]
   }[] = [];
 
-
-  constructor(
-    protected repository: any) {}
-
+  constructor(protected repository: Repository<TEntity>) {}
 
   protected getFakeFields(
     customFields?: Partial<TEntity>,
@@ -56,11 +56,11 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     customFields?: Partial<TEntity>,
   ): Promise<TEntity> {
     const fields = this.getFakeFields(customFields);
-    const entity = await this.repository.create(fields, {returning: true});
+    const entity = await this.repository.save(fields as DeepPartial<TEntity>);
     this.entityIds.push(this.getId(entity));
     await this.processNested(entity);
     this.clearStates();
-    return entity;
+    return entity as TEntity;
   }
 
   protected async processNested(newParent: TEntity): Promise<void> {
@@ -80,15 +80,17 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     this.nestedEntities = [];
   }
 
-
   async createMany(
     count: number,
     customFields?: Partial<TEntity>,
   ): Promise<TEntity[]> {
     const bulkInsertData = Array(count)
       .fill(1)
-      .map(() => (this.getFakeFields(customFields)));
-    const entities = await this.repository.bulkCreate(bulkInsertData, {returning: true});
+      .map(() => {
+        const fields: any = this.getFakeFields(customFields);
+        return this.repository.create(fields)
+      });
+    const entities = await this.repository.save(bulkInsertData as DeepPartial<TEntity>[]);
     const ids = entities.map(e => this.getId(e));
     this.entityIds.push(...ids);
     if (this.nestedEntities.length) {
@@ -98,7 +100,6 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return entities;
   }
 
-
   getId(e: TEntity): any {
     if (e[this.idFieldName]) {
       return e[this.idFieldName];
@@ -106,17 +107,15 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     throw new Error(`Id field "${this.idFieldName}" is empty`)
   }
 
-  //* Delete all entities created by this service
-  async cleanup(): Promise<number> {
+  async cleanup(): Promise<DeleteResult> {
     if(!this.entityIds.length) {
-      return 0;
+      return { affected: 0, raw: undefined }
     }
-    return this.delete(this.entityIds);
+    return this.repository.delete(this.entityIds)
   }
 
-  async delete(entityIds): Promise<number> {
-    const where = {};
-    where[this.idFieldName] = entityIds;
-    return this.repository.destroy({where});
+  async delete(entityIds) {
+    return this.repository.delete(entityIds)
   }
+
 }

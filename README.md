@@ -13,7 +13,15 @@ npm i --save-dev fake-entity-service
 
 ## Usage
 
-Target ORM is Sequelize.
+Target ORMs are Sequelize and TypeORM. So you need to import one of the libraries as root.
+
+```typescript
+import { SequelizeFakeEntityService } from 'fake-entity-service';
+```
+or 
+```typescript
+import { TypeOrmFakeEntityService } from 'fake-entity-service';
+```
 
 Target framework is NestJS but the code is framework agnostic.
 
@@ -105,3 +113,8 @@ const customers = await fakeUserService
 
 This code creates 5 users with customer role and 2 notifications for each user.
 
+You can also delete all created entities with `cleanup` method:
+
+```typescript
+await fakeUserService.cleanup();
+```
