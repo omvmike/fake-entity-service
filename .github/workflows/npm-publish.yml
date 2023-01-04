@@ -12,15 +12,29 @@ on:
     types: [created]
 
 jobs:
-#  build:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v3
-#      - uses: actions/setup-node@v3
-#        with:
-#          node-version: 16
-#      - run: npm ci
-#      - run: npm test
+  build-and-test:
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: test-pwd
+          POSTGRES_DB: test-db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - run: npm ci
+      - run: npm test
 
   publish-npm:
 #    needs: build
