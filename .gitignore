@@ -1,6 +1,7 @@
 # Node artifact files
 node_modules/
 dist/
+coverage/
 
 # Compiled Java class files
 *.class
@@ -38,3 +39,6 @@ Thumbs.db
 *.flv
 *.mov
 *.wmv
+
+# Docker volumes
+docker/postgresql/data

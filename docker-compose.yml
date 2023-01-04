@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+#  app:
+#    build:
+#      context: ./docker/api
+#      dockerfile: Dockerfile
+#    user: "node"
+#    command: >
+#      bash -c "npm install
+#      && nest start"
+#    volumes:
+#      - .:/app
+#    ports:
+#      - '8080:8080'
+#      - '9229:9292'
+#    depends_on:
+#      - pg-db
+#    tty: true
+
+  pg-db:
+    image: postgres:14-alpine
+    user: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: tester
+      POSTGRES_PASSWORD: test-pwd
+      POSTGRES_DB: test-db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - './docker/postgresql/data:/var/lib/postgresql/data'

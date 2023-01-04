@@ -14,5 +14,15 @@
     "allowJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "test",
+    "dist",
+    "docker",
+    "sequelize",
+    "coverage",
+    "**/*spec.ts",
+    "src/tests"
+  ]
 }
