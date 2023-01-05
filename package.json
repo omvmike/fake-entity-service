@@ -1,6 +1,6 @@
 {
   "name": "fake-entity-service",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "A fake database entities service for testing",
   "author": {
     "email": "mike.onofrienko@clockwise.software",
@@ -65,7 +65,7 @@
           "json",
           "ts"
         ],
-        "rootDir": "src",
+        "rootDir": "tests",
         "testRegex": ".*\\.int-spec\\.ts$",
         "transform": {
           "^.+\\.(t|j)s$": "ts-jest"

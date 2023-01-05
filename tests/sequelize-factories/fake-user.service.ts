@@ -1,13 +1,13 @@
 import {faker} from '@faker-js/faker';
-import {User} from "../typeorm-models/user.entity";
+import {User} from "../sequelize-models/user.entity";
+
+import {SequelizeFakeEntityService} from "../../src";
 import {RoleIds} from "../sequelize-models/role.entity";
-import {TypeormFakeEntityService} from "../../typeorm-fake-entity.service";
-import {Repository} from "typeorm";
 
 
-export class FakeUserService extends TypeormFakeEntityService<User> {
+export class FakeUserService extends SequelizeFakeEntityService<User> {
   constructor(
-    public repository: Repository<User>,
+    public repository: typeof User,
   ) {
     super(repository)
   }
