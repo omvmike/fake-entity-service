@@ -1,9 +1,13 @@
 import {Model} from "sequelize-typescript";
+import {Op} from "sequelize";
 
 export class SequelizeFakeEntityService<TEntity extends Model> {
 
+  // * Array of ids of entities created by this service
   public entityIds = [];
-  public idFieldName = 'id';
+
+  // * Override id filed name described in model (it's optional)
+  public idFieldNames = [];
 
   protected states?: Partial<TEntity>;
 
@@ -57,7 +61,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   ): Promise<TEntity> {
     const fields = this.getFakeFields(customFields);
     const entity = await this.repository.create(fields, {returning: true});
-    this.entityIds.push(this.getId(entity));
+    this.entityIds.push(this.hasCompositeId() ? this.pickKeysFromObject(entity) : this.getId(entity));
     await this.processNested(entity);
     this.clearStates();
     return entity;
@@ -89,7 +93,9 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
       .fill(1)
       .map(() => (this.getFakeFields(customFields)));
     const entities = await this.repository.bulkCreate(bulkInsertData, {returning: true});
-    const ids = entities.map(e => this.getId(e));
+    const ids = this.hasCompositeId()
+      ? entities.map(e => this.pickKeysFromObject(e))
+      : entities.map(e => this.getId(e));
     this.entityIds.push(...ids);
     if (this.nestedEntities.length) {
       await Promise.all(entities.map(e => this.processNested(e)));
@@ -98,12 +104,37 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return entities;
   }
 
+  getIdFieldNames(): string[] {
+    return this.idFieldNames.length > 0
+      ? this.idFieldNames
+      : this.repository.primaryKeyAttributes;
+  }
+
+  hasCompositeId(): boolean {
+    return this.getIdFieldNames().length > 1;
+  }
+
+  pickKeysFromObject(obj: any): any {
+    return this.getIdFieldNames()
+      .reduce((acc, key) => {
+        acc[key] = obj[key];
+        if (acc[key] === undefined) {
+          throw new Error(`Id field "${key}" is empty`)
+        }
+        return acc;
+      }, {});
+  }
 
   getId(e: TEntity): any {
-    if (e[this.idFieldName]) {
-      return e[this.idFieldName];
+    if (this.hasCompositeId()) {
+      throw new Error('Composite id is not supported use pickKeysFromObject instead');
     }
-    throw new Error(`Id field "${this.idFieldName}" is empty`)
+    const idFieldName = this.getIdFieldNames()[0];
+    const idValue = e[idFieldName];
+    if (idValue === undefined) {
+      throw new Error(`Id field "${idFieldName}" is empty`)
+    }
+    return e[this.getIdFieldNames()[0]];
   }
 
   //* Delete all entities created by this service
@@ -116,7 +147,11 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
 
   async delete(entityIds): Promise<number> {
     const where = {};
-    where[this.idFieldName] = entityIds;
+    if (this.hasCompositeId()) {
+      where[Op.or] = entityIds;
+    } else {
+      where[this.getIdFieldNames()[0]] = entityIds;
+    }
     return this.repository.destroy({where});
   }
 }

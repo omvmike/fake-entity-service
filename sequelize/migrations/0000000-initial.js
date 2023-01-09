@@ -159,13 +159,15 @@ const migrationCommands = [
   {
     fn: 'createTable',
     params: [
-      'followers',
+      'leader_followers',
       {
-        following_id: {
+        leader_id: {
           references: {
             model: 'users',
             key: 'id',
           },
+          onDelete: 'CASCADE',
+          onUpdate: 'CASCADE',
           allowNull: false,
           type: Sequelize.INTEGER,
         },
@@ -174,6 +176,8 @@ const migrationCommands = [
             model: 'users',
             key: 'id',
           },
+          onDelete: 'CASCADE',
+          onUpdate: 'CASCADE',
           allowNull: false,
           type: Sequelize.INTEGER,
         },
@@ -199,7 +203,7 @@ const rollbackCommands = [
   },
   {
     fn: 'dropTable',
-    params: ['followers'],
+    params: ['leader_followers'],
   },
   {
     fn: 'dropTable',
