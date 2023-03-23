@@ -1,10 +1,15 @@
 {
   "name": "fake-entity-service",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A fake database entities service for testing",
   "author": {
     "email": "mike.onofrienko@clockwise.software",
     "name": "Mike Onofrienko"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omvmike/fake-entity-service.git"
   },
   "scripts": {
     "build": "tsc --sourceMap",
