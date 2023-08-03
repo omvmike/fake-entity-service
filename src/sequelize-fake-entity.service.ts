@@ -1,6 +1,25 @@
 import {Model} from "sequelize-typescript";
 import {Op} from "sequelize";
 
+type SingleKeyRelation = {
+  parent: string,
+  nested: string
+};
+
+type MultipleKeyRelations = {
+  parent: string,
+  nested: string
+}[];
+
+// This type based on Sequelize relations feature
+// so you should describe relation in your model to use it
+type PropertyKeyRelation = {
+  // You can use internal Sequelize model relation field name
+  // instead of parent and nested fields
+  // it uses Sequelize $add method to add nested entities
+  propertyKey: string
+};
+
 export class SequelizeFakeEntityService<TEntity extends Model> {
 
   // * Array of ids of entities created by this service
@@ -11,17 +30,13 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
 
   protected states?: Partial<TEntity>;
 
+
+
   protected nestedEntities: {
     service: SequelizeFakeEntityService<Model>,
     count: number,
     customFields?: any,
-    relationFields: {
-      parent: string,
-      nested: string
-    } | {
-      parent: string,
-      nested: string
-    }[]
+    relationFields: SingleKeyRelation | MultipleKeyRelations | PropertyKeyRelation
   }[] = [];
 
 
@@ -67,19 +82,31 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return entity;
   }
 
+  protected async processSequelizeRelation(newParent: TEntity, nested: any): Promise<void> {
+    const nestedEntities = await nested.service.createMany(nested.count,{
+      ...(nested.customFields ?? {})
+    });
+    await newParent.$add(nested.relationFields.propertyKey, nestedEntities);
+  }
   protected async processNested(newParent: TEntity): Promise<void> {
     for (const nested of this.nestedEntities) {
-      const nestedRelationFields = Array.isArray(nested.relationFields)
-        ? nested.relationFields
-        : [ nested.relationFields ];
-      const relatedFields = nestedRelationFields.reduce((acc, f) => {
-        acc[f.nested] = newParent[f.parent];
-        return acc;
-      }, {});
-      await nested.service.createMany(nested.count, {
-        ...(nested.customFields ?? {}),
-        ...relatedFields
-      })
+      if ('propertyKey' in nested.relationFields && nested.relationFields.propertyKey) {
+        await this.processSequelizeRelation(newParent, nested);
+      } else {
+        const nestedRelationFields = Array.isArray(nested.relationFields)
+          ? nested.relationFields
+          : [nested.relationFields];
+        const relatedFields = nestedRelationFields.reduce((acc, f) => {
+          if ('parent' in f && 'nested' in f) {
+            acc[f.nested] = newParent[f.parent];
+          }
+          return acc;
+        }, {});
+        await nested.service.createMany(nested.count, {
+          ...(nested.customFields ?? {}),
+          ...relatedFields
+        });
+      }
     }
     this.nestedEntities = [];
   }

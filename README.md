@@ -118,3 +118,23 @@ You can also delete all created entities with `cleanup` method:
 ```typescript
 await fakeUserService.cleanup();
 ```
+
+## Sequelize specific features
+
+- The library can fork with multi-column primary keys. It uses Sequelize's model `primaryKeyAttributes` property to detect them.
+
+- The library can work with Sequelize's relations. If you described relations in your model, the library will use them to create nested entities.
+> For example, if you have `User` and `Notification` models and `User.hasMany(Notification)` relation, you can describe `withNotifications` method from previous example like below:
+```typescript
+  withNotifications(fakeNotificationService: FakeNotificationService, count: number, customFields?: Partial<Notification>): FakeUserService {
+    this.nestedEntities.push({
+      service: fakeNotificationService,
+      count,
+      customFields,
+      relationFields: {
+        propertyKey: 'notifications', // the name of the relation property in the model
+      }
+    });
+    return this;
+  }
+```
