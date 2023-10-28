@@ -2,7 +2,8 @@ import {faker} from '@faker-js/faker';
 import {User} from "../sequelize-models/user.entity";
 
 import {SequelizeFakeEntityService} from "../../src";
-import {RoleIds} from "../sequelize-models/role.entity";
+import {Role, RoleIds} from "../sequelize-models/role.entity";
+import {FakeRoleService} from "./fake-role.service";
 
 
 export class FakeUserService extends SequelizeFakeEntityService<User> {
@@ -36,6 +37,26 @@ export class FakeUserService extends SequelizeFakeEntityService<User> {
 
   asManager(): FakeUserService {
     this.addStates({roleId: RoleIds.MANAGER});
+    return this;
+  }
+
+  rolesSequence(roles: RoleIds[]): FakeUserService {
+    this.addStatesGenerator(roles.map(roleId => ({
+      roleId,
+    })));
+    return this;
+  }
+
+  withCustomRole(fakeRoleService: FakeRoleService, roleFields?: Partial<Role>): FakeUserService {
+    this.parentEntities.push({
+      service: fakeRoleService,
+      each: true,
+      customFields: roleFields,
+      relationFields: {
+        parent: 'id',
+        nested: 'roleId'
+      }
+    });
     return this;
   }
 

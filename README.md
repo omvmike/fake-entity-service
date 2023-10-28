@@ -1,5 +1,8 @@
 # fake-entity-service
 
+<a href="https://www.npmjs.com/package/fake-entity-service" target="_blank"><img src="https://img.shields.io/npm/v/fake-entity-service" alt="NPM Version" /></a>
+<a href="https://www.npmjs.com/package/fake-entity-service" target="_blank"><img src="https://img.shields.io/npm/l/fake-entity-service" alt="Package License" /></a>
+
 This is a fake entity service that can be used for testing purposes.
 The aim is simplify database data generation for integration and end-to-end tests.
 
@@ -138,3 +141,81 @@ await fakeUserService.cleanup();
     return this;
   }
 ```
+
+- The library has addSequence() method that helps you generate of sequence of entities. 
+
+> For example, you can create 3 users with specific roles like below:
+```typescript
+const users = await fakeUserService
+  .addSequence('roleId',[RoleIds.ADMIN, RoleIds.CUSTOMER, RoleIds.MANAGER])
+  .createMany(3);
+```
+> as a result you will get 3 users with roles: admin, customer, manager.
+> 
+> The sequences are looped, so you can create 5 users with 3 roles and get 2 users with admin role and 2 users with customer role and 1 user with manager role.
+> 
+
+> This feature is built on top of protected addStatesGenerator() method so you can get even more flexibility when build your own inherited entity services by describing not only static states but also dynamic states.
+> 
+> here's an example of add sequence method implementation for the `FakeUserService` class:
+```typescript
+  addSequence(roles: RoleIds[]): FakeUserService {
+      this.addStatesGenerator(roles.map(roleId => ({
+        roleId,
+      })));
+      return this;
+  }
+```
+
+- As well as nested entities you can also describe parent entities from which you current entity depends on. For example, you can create a user with a custom role and then attach it to the user.
+
+> Here's an example of `withCustomRole` method implementation for the `FakeUserService` class:
+```typescript 
+withCustomRole(fakeRoleService: FakeRoleService, roleFields?: Partial<Role>): FakeUserService {
+    this.parentEntities.push({
+      service: fakeRoleService,
+      each: false, // if you need to create a new role for each user
+      customFields: roleFields, // custom fields for the parentb entity
+      relationFields: {
+        parent: 'id', // the name of the relation property in the parent Role model
+        nested: 'roleId' // the name of the relation property in the nested User model
+      }
+    });
+    return this;
+}
+```
+
+Then you can use it like below:
+
+```typescript
+const customers = await fakeUserService
+  .withCustomRole(fakeRoleService, {name: 'super-customer'})
+  .createMany(5);
+```
+
+> If you need to create a new role for each user, you can use `each: true` option.
+> 
+> Here's an example of `withCustomRole` method implementation for the `FakeUserService` class:
+```typescript
+withCustomRole(fakeRoleService: FakeRoleService, roleFields?: Partial<Role>): FakeUserService {
+    this.parentEntities.push({
+      service: fakeRoleService,
+      each: true, // if you need to create a new role for each user
+      customFields: roleFields, // custom fields for the parentb entity
+      relationFields: {
+        parent: 'id', // the name of the relation property in the parent Role model
+        nested: 'roleId' // the name of the relation property in the nested User model
+      }
+    });
+    return this;
+}
+```
+
+Then you can use it like below:
+```typescript
+const users = await fakeUserService.withCustomRole(fakeRoleService.addSequence('name', ['first', 'second', 'third'])).createMany(3);
+```
+> as a result you will get 3 users with roles: first, second, third.
+
+>> You can also use `addSequence` method to generate a sequence of parent entities with different names.
+>> Using addSequence could be very helpful if yo want to generate a sequence of entities with specific unique field values.

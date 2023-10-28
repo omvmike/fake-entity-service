@@ -30,6 +30,8 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
 
   protected states?: Partial<TEntity>;
 
+  protected statesGenerators: Generator<Partial<TEntity>>[] = [];
+
 
 
   protected nestedEntities: {
@@ -37,6 +39,14 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     count: number,
     customFields?: any,
     relationFields: SingleKeyRelation | MultipleKeyRelations | PropertyKeyRelation
+  }[] = [];
+
+  protected parentEntities: {
+    service: SequelizeFakeEntityService<Model>,
+    // default false, means that exacly one parent will be created and attached for all nested entity declared by createMany(), otherwise parent will be created for each nested entity
+    each?: boolean,
+    customFields?: any,
+    relationFields: SingleKeyRelation | MultipleKeyRelations
   }[] = [];
 
 
@@ -48,7 +58,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     customFields?: Partial<TEntity>,
   ): Partial<TEntity> {
     const fields: Partial<TEntity> = this.setFakeFields();
-    return Object.assign(fields, this.states || {}, customFields || {});
+    return Object.assign(fields, this.nextStates(), customFields || {});
   }
 
   /* You can override this method
@@ -67,13 +77,43 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     this.states = Object.assign(this.states || {}, state);
   }
 
+  /* The same purpose as the states, but you can pass array of states
+      and its elements will be used as a state for every new entity in round-robin manner.
+   */
+  protected addStatesGenerator(states: Partial<TEntity>[]): void {
+    this.statesGenerators.push(this.circularArrayGenerator(states));
+  }
+
+
+  addSequence<K extends keyof TEntity>(field: K, values: TEntity[K][]): this {
+    this.addStatesGenerator(values.map(value => {
+      const state = {} as Partial<TEntity>;
+      state[field] = value;
+      return state;
+    }));
+    return this;
+  }
+
+  protected nextStates(): Partial<TEntity> {
+    const states = this.states || {};
+    if(this.statesGenerators.length) {
+      this.statesGenerators.reduce((acc, gen) => {
+        acc = Object.assign(acc, gen.next().value);
+        return acc;
+      }, states);
+    }
+    return states;
+  }
+
   protected clearStates(): void {
     this.states = undefined;
+    this.statesGenerators = [];
   }
 
   async create(
     customFields?: Partial<TEntity>,
   ): Promise<TEntity> {
+    await this.processParents();
     const fields = this.getFakeFields(customFields);
     const entity = await this.repository.create(fields, {returning: true});
     this.entityIds.push(this.hasCompositeId() ? this.pickKeysFromObject(entity) : this.getId(entity));
@@ -112,10 +152,34 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   }
 
 
+  protected async processParents(nestedCount = 1): Promise<void> {
+    for (const parentEntityConfig of this.parentEntities) {
+      const newParents = await parentEntityConfig.service.createMany(parentEntityConfig.each ? nestedCount : 1, {
+        ...(parentEntityConfig.customFields ?? {})
+      });
+      const relatedFieldsArray = newParents.map(newParent => {
+        const parentRelationFields = Array.isArray(parentEntityConfig.relationFields)
+          ? parentEntityConfig.relationFields
+          : [parentEntityConfig.relationFields];
+        const relatedFields = parentRelationFields.reduce((acc, f) => {
+          if ('parent' in f && 'nested' in f) {
+            acc[f.nested] = newParent[f.parent];
+          }
+          return acc;
+        }, {});
+        return relatedFields;
+      });
+      this.addStatesGenerator(relatedFieldsArray);
+    }
+    this.parentEntities = [];
+  }
+
+
   async createMany(
     count: number,
     customFields?: Partial<TEntity>,
   ): Promise<TEntity[]> {
+    await this.processParents(count);
     const bulkInsertData = Array(count)
       .fill(1)
       .map(() => (this.getFakeFields(customFields)));
@@ -135,6 +199,14 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return this.idFieldNames.length > 0
       ? this.idFieldNames
       : this.repository.primaryKeyAttributes;
+  }
+
+  *circularArrayGenerator(arr) {
+    let index = 0;
+    while (true) {
+      yield arr[index];
+      index = (index + 1) % arr.length;
+    }
   }
 
   hasCompositeId(): boolean {
@@ -180,5 +252,10 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
       where[this.getIdFieldNames()[0]] = entityIds;
     }
     return this.repository.destroy({where});
+  }
+
+  async getEntityAt(index: number): Promise<TEntity> {
+    const entityId = await this.entityIds.at(index);
+    return this.repository.findByPk(entityId);
   }
 }
