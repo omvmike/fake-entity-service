@@ -73,8 +73,12 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
      For example, when you are adding nested entity, you can mutate the parent entity
      Can be called multiple times to add multiple states
   */
-  protected addStates(state: Partial<TEntity>): void {
-    this.states = Object.assign(this.states || {}, state);
+  protected addStates(states: Partial<TEntity> | Partial<TEntity>[]): void {
+    if (Array.isArray(states)) {
+      this.statesGenerators.push(this.circularArrayGenerator(states));
+    } else {
+      this.states = Object.assign(this.states || {}, states);
+    }
   }
 
   /* The same purpose as the states, but you can pass array of states

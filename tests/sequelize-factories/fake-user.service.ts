@@ -41,7 +41,7 @@ export class FakeUserService extends SequelizeFakeEntityService<User> {
   }
 
   rolesSequence(roles: RoleIds[]): FakeUserService {
-    this.addStatesGenerator(roles.map(roleId => ({
+    this.addStates(roles.map(roleId => ({
       roleId,
     })));
     return this;
