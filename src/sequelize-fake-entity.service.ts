@@ -32,6 +32,19 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
 
   protected statesGenerators: Generator<Partial<TEntity>>[] = [];
 
+  /* Preprocessor is a function that can be used to mutate entity fields right before entity creation
+    It allows you to get access to entity fields values
+    after all states and statesGenerators and customFields are applied
+    and mutate them.
+  */
+  protected entityPreprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>);
+
+  /* Postprocessor is a function that can be used to mutate entity right after entity creation
+      It allows you to get access to entity fields values
+      Also you can perform side effects related to entity creation.
+      For example if you need to perform some additional actions for each created entity
+   */
+  protected entityPostprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>);
 
 
   protected nestedEntities: {
@@ -73,12 +86,25 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
      For example, when you are adding nested entity, you can mutate the parent entity
      Can be called multiple times to add multiple states
   */
-  protected addStates(states: Partial<TEntity> | Partial<TEntity>[]): void {
+  protected addStates(
+    states: Partial<TEntity> | Partial<TEntity>[] | (() => Partial<TEntity>) | (() => Partial<TEntity>)[],
+  ): void {
     if (Array.isArray(states)) {
-      this.statesGenerators.push(this.circularArrayGenerator(states));
-    } else {
-      this.states = Object.assign(this.states || {}, states);
+      const statesArray: Partial<TEntity>[] = states.map(state => (typeof state === 'function') ? state() : state);
+      if (statesArray.length > 0) {
+        this.statesGenerators.push(this.circularArrayGenerator(statesArray));
+      }
+      return;
     }
+    this.states = Object.assign(this.states || {}, (typeof states === 'function') ? states() : states);
+  }
+
+  setEntityPreprocessor(preprocessor: (fields: Partial<TEntity>, ) => (Partial<TEntity> | Promise<Partial<TEntity>>)): void {
+    this.entityPreprocessor = preprocessor;
+  }
+
+  setEntityPostprocessor(postprocessor: (entity: TEntity, ) => (TEntity | Promise<TEntity>)): void {
+    this.entityPostprocessor = postprocessor;
   }
 
   /* The same purpose as the states, but you can pass array of states
@@ -88,8 +114,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     this.statesGenerators.push(this.circularArrayGenerator(states));
   }
 
-
-  addSequence<K extends keyof TEntity>(field: K, values: TEntity[K][]): this {
+  addFieldSequence<K extends keyof TEntity>(field: K, values: TEntity[K][]): this {
     this.addStatesGenerator(values.map(value => {
       const state = {} as Partial<TEntity>;
       state[field] = value;
@@ -112,6 +137,8 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   protected clearStates(): void {
     this.states = undefined;
     this.statesGenerators = [];
+    this.entityPreprocessor = undefined;
+    this.entityPostprocessor = undefined;
   }
 
   async create(
@@ -119,12 +146,17 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   ): Promise<TEntity> {
     await this.processParents();
     const fields = this.getFakeFields(customFields);
-    const entity = await this.repository.create(fields, {returning: true});
+    const preprocessedFields = this.entityPreprocessor
+      ? await this.entityPreprocessor(fields, 0)
+      : fields;
+    const entity = await this.repository.create(preprocessedFields, {returning: true});
     this.entityIds.push(this.hasCompositeId() ? this.pickKeysFromObject(entity) : this.getId(entity));
     await this.processNested(entity);
     this.clearStates();
-    return entity;
+    const postprocessed = await this.postprocessEntities([entity]);
+    return postprocessed.pop();
   }
+
 
   protected async processSequelizeRelation(newParent: TEntity, nested: any): Promise<void> {
     const nestedEntities = await nested.service.createMany(nested.count,{
@@ -178,15 +210,36 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     this.parentEntities = [];
   }
 
+  protected async preprocessEntities(
+    count: number,
+    customFields?: Partial<TEntity>,
+  ): Promise<Partial<TEntity>[]> {
+    const bulkInsertDataPromises = Array(count)
+      .fill(1)
+      .map((_, i) => {
+        const fields: any = this.getFakeFields(customFields);
+        return this.entityPreprocessor(fields, i);
+      })
+    return Promise.all(bulkInsertDataPromises);
+  }
+
+  protected async postprocessEntities(entities: TEntity[]): Promise<TEntity[]> {
+    if(this.entityPostprocessor) {
+      const postprocessorEntitiesPromises = entities.map((entity, i) => {
+        return this.entityPostprocessor(entity, i);
+      });
+      return Promise.all(postprocessorEntitiesPromises);
+    }
+    return entities;
+  }
+
 
   async createMany(
     count: number,
     customFields?: Partial<TEntity>,
   ): Promise<TEntity[]> {
     await this.processParents(count);
-    const bulkInsertData = Array(count)
-      .fill(1)
-      .map(() => (this.getFakeFields(customFields)));
+    const bulkInsertData = await this.preprocessEntities(count, customFields);
     const entities = await this.repository.bulkCreate(bulkInsertData, {returning: true});
     const ids = this.hasCompositeId()
       ? entities.map(e => this.pickKeysFromObject(e))
@@ -196,7 +249,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
       await Promise.all(entities.map(e => this.processNested(e)));
     }
     this.clearStates();
-    return entities;
+    return this.postprocessEntities(entities);
   }
 
   getIdFieldNames(): string[] {
