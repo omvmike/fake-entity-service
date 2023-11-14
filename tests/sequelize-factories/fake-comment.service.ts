@@ -23,29 +23,25 @@ export class FakeCommentService extends SequelizeFakeEntityService<Comment> {
     };
   }
 
-  withParentPost(fakePostService: FakePostService, postFields?: Partial<Post>, each = false): FakeCommentService {
-    this.parentEntities.push({
-      service: fakePostService,
-      each,
-      customFields: postFields,
-      relationFields: {
+  withParentPost(fakePostService: FakePostService, each = false, postFields?: Partial<Post>): FakeCommentService {
+    return this.withParent(
+      fakePostService,
+      {
         parent: 'id',
         nested: 'postId'
-      }
-    });
-    return this;
+      },
+      each,
+      postFields) as FakeCommentService;
   }
 
-  withParentUser(fakeUserService: FakeUserService, userFields?: Partial<User>, each = false): FakeCommentService {
-    this.parentEntities.push({
-      service: fakeUserService,
-      each,
-      customFields: userFields,
-      relationFields: {
+  withParentUser(fakeUserService: FakeUserService, each = false, userFields?: Partial<User>): FakeCommentService {
+    return this.withParent(
+      fakeUserService,
+      {
         parent: 'id',
         nested: 'userId'
-      }
-    });
-    return this;
+      },
+      each,
+      userFields) as FakeCommentService;
   }
 }

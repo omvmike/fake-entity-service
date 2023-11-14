@@ -80,8 +80,8 @@ describe('Test SequelizeFakeEntityService can create and cleanup DB entities', (
     expect(customerFollower).toBeDefined();
     expect(customerFollower.followerId).toBe(manager.id);
     expect(customerFollower.leaderId).toBe(customer.id);
-    expect(fakeLeaderFollowerService.pickKeysFromObject(customerFollower)).toHaveProperty('followerId');
-    expect(fakeLeaderFollowerService.pickKeysFromObject(customerFollower)).toHaveProperty('leaderId');
+    expect(fakeLeaderFollowerService.getId(customerFollower)).toHaveProperty('followerId');
+    expect(fakeLeaderFollowerService.getId(customerFollower)).toHaveProperty('leaderId');
 
     expect(managerFollower).toBeDefined();
     expect(managerFollower.followerId).toBe(customer.id);
@@ -122,7 +122,7 @@ describe('Test SequelizeFakeEntityService can create and cleanup DB entities', (
 
   it('should create unique parent for each nested entities', async () => {
     const posts = await fakePostService
-      .withParentUser(fakeUserService.asRole(RoleIds.CUSTOMER),{}, true)
+      .withParentUser(fakeUserService.asRole(RoleIds.CUSTOMER),true)
       .createMany(5);
     expect(posts).toBeDefined();
     expect(posts.length).toBe(5);

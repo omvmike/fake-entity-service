@@ -82,50 +82,11 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return {} as Partial<TEntity>;
   }
 
-  /* Add fields to be used when creating entities
-     Main purpose is to set fields as a side effect of service methods
-     For example, when you are adding nested entity, you can mutate the parent entity
-     Can be called multiple times to add multiple states
-  */
-  public addStates(
-    states: Partial<TEntity> | Partial<TEntity>[] | (() => Partial<TEntity>) | (() => Partial<TEntity>)[],
-  ): this
-  {
-    if (Array.isArray(states)) {
-      const statesArray: Partial<TEntity>[] = states.map(state => (typeof state === 'function') ? state() : state);
-      if (statesArray.length > 0) {
-        this.statesGenerators.push(this.circularArrayGenerator(statesArray));
-      }
-      return this;
-    }
-    this.states = Object.assign(this.states || {}, (typeof states === 'function') ? states() : states);
-    return this;
-  }
-
-  public afterMakingCallback(preprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>)): this {
-    this.entityPreprocessor = preprocessor;
-    return this;
-  }
-
-  public afterCreatingCallback(postprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>)): this {
-    this.entityPostprocessor = postprocessor;
-    return this;
-  }
-
   /* The same purpose as the states, but you can pass array of states
       and its elements will be used as a state for every new entity in round-robin manner.
    */
   protected addStatesGenerator(states: Partial<TEntity>[]): void {
     this.statesGenerators.push(this.circularArrayGenerator(states));
-  }
-
-  addFieldSequence<K extends keyof TEntity>(field: K, values: TEntity[K][]): this {
-    this.addStatesGenerator(values.map(value => {
-      const state = {} as Partial<TEntity>;
-      state[field] = value;
-      return state;
-    }));
-    return this;
   }
 
   protected nextStates(): Partial<TEntity> {
@@ -145,23 +106,6 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     this.entityPreprocessor = undefined;
     this.entityPostprocessor = undefined;
   }
-
-  async create(
-    customFields?: Partial<TEntity>,
-  ): Promise<TEntity> {
-    await this.processParents();
-    const fields = this.getFakeFields(customFields);
-    const preprocessedFields = this.entityPreprocessor
-      ? await this.entityPreprocessor(fields, 0)
-      : fields;
-    const entity = await this.repository.create(preprocessedFields, {returning: true});
-    this.entityIds.push(this.hasCompositeId() ? this.pickKeysFromObject(entity) : this.getId(entity));
-    await this.processNested(entity);
-    const postprocessed = await this.postprocessEntities([entity]);
-    this.clearStates();
-    return postprocessed.pop();
-  }
-
 
   protected async processSequelizeRelation(newParent: TEntity, nested: any): Promise<void> {
     const nestedEntities = await nested.service.createMany(nested.count,{
@@ -255,33 +199,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return results;
   }
 
-
-  async createMany(
-    count: number,
-    customFields?: Partial<TEntity>,
-  ): Promise<TEntity[]> {
-    await this.processParents(count);
-    const bulkInsertData = await this.preprocessEntities(count, customFields);
-    const entities = await this.repository.bulkCreate(bulkInsertData, {returning: true});
-    const ids = this.hasCompositeId()
-      ? entities.map(e => this.pickKeysFromObject(e))
-      : entities.map(e => this.getId(e));
-    this.entityIds.push(...ids);
-    if (this.nestedEntities.length) {
-      await this.sequentialResolver(entities.map(e => this.processNested(e)));
-    }
-    const processedEntities =  this.postprocessEntities(entities);
-    this.clearStates();
-    return processedEntities;
-  }
-
-  getIdFieldNames(): string[] {
-    return this.idFieldNames.length > 0
-      ? this.idFieldNames
-      : this.repository.primaryKeyAttributes;
-  }
-
-  *circularArrayGenerator(arr) {
+  protected *circularArrayGenerator(arr) {
     let index = 0;
     while (true) {
       yield arr[index];
@@ -289,11 +207,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     }
   }
 
-  hasCompositeId(): boolean {
-    return this.getIdFieldNames().length > 1;
-  }
-
-  pickKeysFromObject(obj: any): any {
+  protected pickKeysFromObject(obj: any): any {
     return this.getIdFieldNames()
       .reduce((acc, key) => {
         acc[key] = obj[key];
@@ -304,9 +218,19 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
       }, {});
   }
 
-  getId(e: TEntity): any {
+  public getIdFieldNames(): string[] {
+    return this.idFieldNames.length > 0
+      ? this.idFieldNames
+      : this.repository.primaryKeyAttributes;
+  }
+
+  public hasCompositeId(): boolean {
+    return this.getIdFieldNames().length > 1;
+  }
+
+  public getId(e: TEntity): any {
     if (this.hasCompositeId()) {
-      throw new Error('Composite id is not supported use pickKeysFromObject instead');
+      return this.pickKeysFromObject(e);
     }
     const idFieldName = this.getIdFieldNames()[0];
     const idValue = e[idFieldName];
@@ -316,15 +240,87 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return e[this.getIdFieldNames()[0]];
   }
 
+  public async create(
+    customFields?: Partial<TEntity>,
+  ): Promise<TEntity> {
+    await this.processParents();
+    const fields = this.getFakeFields(customFields);
+    const preprocessedFields = this.entityPreprocessor
+      ? await this.entityPreprocessor(fields, 0)
+      : fields;
+    const entity = await this.repository.create(preprocessedFields, {returning: true});
+    this.entityIds.push(this.getId(entity));
+    await this.processNested(entity);
+    const postprocessed = await this.postprocessEntities([entity]);
+    this.clearStates();
+    return postprocessed.pop();
+  }
+
+  public async createMany(
+    count: number,
+    customFields?: Partial<TEntity>,
+  ): Promise<TEntity[]> {
+    await this.processParents(count);
+    const bulkInsertData = await this.preprocessEntities(count, customFields);
+    const entities = await this.repository.bulkCreate(bulkInsertData, {returning: true});
+    const ids = entities.map(e => this.getId(e));
+    this.entityIds.push(...ids);
+    if (this.nestedEntities.length) {
+      await this.sequentialResolver(entities.map(e => this.processNested(e)));
+    }
+    const processedEntities =  this.postprocessEntities(entities);
+    this.clearStates();
+    return processedEntities;
+  }
+
+  /* Add fields to be used when creating entities
+     Main purpose is to set fields as a side effect of service methods
+     For example, when you are adding nested entity, you can mutate the parent entity
+     Can be called multiple times to add multiple states
+  */
+  public addStates(
+    states: Partial<TEntity> | Partial<TEntity>[] | (() => Partial<TEntity>) | (() => Partial<TEntity>)[],
+  ): this
+  {
+    if (Array.isArray(states)) {
+      const statesArray: Partial<TEntity>[] = states.map(state => (typeof state === 'function') ? state() : state);
+      if (statesArray.length > 0) {
+        this.statesGenerators.push(this.circularArrayGenerator(statesArray));
+      }
+      return this;
+    }
+    this.states = Object.assign(this.states || {}, (typeof states === 'function') ? states() : states);
+    return this;
+  }
+
+  public afterMakingCallback(preprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>)): this {
+    this.entityPreprocessor = preprocessor;
+    return this;
+  }
+
+  public afterCreatingCallback(postprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>)): this {
+    this.entityPostprocessor = postprocessor;
+    return this;
+  }
+
+  public addFieldSequence<K extends keyof TEntity>(field: K, values: TEntity[K][]): this {
+    this.addStatesGenerator(values.map(value => {
+      const state = {} as Partial<TEntity>;
+      state[field] = value;
+      return state;
+    }));
+    return this;
+  }
+
   //* Delete all entities created by this service
-  async cleanup(): Promise<number> {
+  public async cleanup(): Promise<number> {
     if(!this.entityIds.length) {
       return 0;
     }
     return this.delete(this.entityIds);
   }
 
-  async delete(entityIds): Promise<number> {
+  public async delete(entityIds): Promise<number> {
     const where = {};
     if (this.hasCompositeId()) {
       where[Op.or] = entityIds;
@@ -337,5 +333,25 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   async getEntityAt(index: number): Promise<TEntity> {
     const entityId = await this.entityIds.at(index);
     return this.repository.findByPk(entityId);
+  }
+
+  public withParent(fakeParentService: SequelizeFakeEntityService<Model>, relationFields: SingleKeyRelation | MultipleKeyRelations, each = false, customFields?: any): SequelizeFakeEntityService<TEntity> {
+    this.parentEntities.push({
+      service: fakeParentService,
+      each,
+      customFields,
+      relationFields
+    });
+    return this;
+  }
+
+  public withNested(fakeNestedService: SequelizeFakeEntityService<Model>, relationFields: SingleKeyRelation | MultipleKeyRelations | PropertyKeyRelation, count = 1, customFields?: any): SequelizeFakeEntityService<TEntity> {
+    this.nestedEntities.push({
+      service: fakeNestedService,
+      count,
+      customFields,
+      relationFields
+    });
+    return this;
   }
 }

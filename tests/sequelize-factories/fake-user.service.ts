@@ -30,24 +30,15 @@ export class FakeUserService extends SequelizeFakeEntityService<User> {
     return this;
   }
 
-  rolesSequence(roles: RoleIds[]): FakeUserService {
-    this.addStates(roles.map(roleId => ({
-      roleId,
-    })));
-    return this;
-  }
-
-  withCustomRole(fakeRoleService: FakeRoleService, roleFields?: Partial<Role>): FakeUserService {
-    this.parentEntities.push({
-      service: fakeRoleService,
-      each: true,
-      customFields: roleFields,
-      relationFields: {
+  withCustomRole(fakeRoleService: FakeRoleService, each = true, roleFields?: Partial<Role>): FakeUserService {
+    return this.withParent(
+      fakeRoleService,
+      {
         parent: 'id',
         nested: 'roleId'
-      }
-    });
-    return this;
+      },
+      each,
+      roleFields) as FakeUserService;
   }
 
 
