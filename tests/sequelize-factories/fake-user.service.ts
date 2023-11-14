@@ -25,18 +25,8 @@ export class FakeUserService extends SequelizeFakeEntityService<User> {
     };
   }
 
-  asAdmin(): FakeUserService {
-    this.addStates({roleId: RoleIds.ADMIN});
-    return this;
-  }
-
-  asCustomer(): FakeUserService {
-    this.addStates({roleId: RoleIds.CUSTOMER});
-    return this;
-  }
-
-  asManager(): FakeUserService {
-    this.addStates({roleId: RoleIds.MANAGER});
+  asRole(roleId: RoleIds): FakeUserService {
+    this.addStates({roleId});
     return this;
   }
 
@@ -60,31 +50,5 @@ export class FakeUserService extends SequelizeFakeEntityService<User> {
     return this;
   }
 
-  // withCustomer(fakeCustomerService: FakeCustomerService, customFields?: Partial<Customer>): FakeUserService {
-  //   this.nestedEntities.push({
-  //     service: fakeCustomerService,
-  //     count: 1,
-  //     customFields,
-  //     relationFields: {
-  //       parent: 'id',
-  //       nested: 'userId'
-  //     }
-  //   });
-  //   this.addStates({roleId: 3});
-  //   return this;
-  // }
-  //
-  // withConsultant(fakeConsultantService: FakeConsultantService, customFields?: Partial<Customer>): FakeUserService {
-  //   this.nestedEntities.push({
-  //     service: fakeConsultantService,
-  //     count: 1,
-  //     customFields,
-  //     relationFields: {
-  //       parent: 'id',
-  //       nested: 'userId'
-  //     }
-  //   });
-  //   this.addStates({roleId: 2});
-  //   return this;
-  // }
+
 }

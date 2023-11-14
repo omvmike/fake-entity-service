@@ -1,3 +1,4 @@
+import { InferAttributes } from 'sequelize';
 import {
   BelongsTo,
   Column,
@@ -8,12 +9,24 @@ import {
 } from 'sequelize-typescript';
 import { Role } from './role.entity';
 
+export class IUserCreateAttributes {
+  email: string;
+  firstName: string;
+  lastName: string;
+  password: string;
+  roleId: number;
+}
+
 @Table({
   timestamps: false,
   tableName: 'users',
   freezeTableName: true,
+  underscored: true,
 })
-export class User extends Model {
+export class User extends Model<
+  InferAttributes<User>,
+  IUserCreateAttributes
+> {
   @Column({
     autoIncrement: true,
     unique: true,
@@ -39,21 +52,18 @@ export class User extends Model {
   @Column({
     type: DataType.TEXT,
     allowNull: true,
-    field: 'first_name',
   })
   firstName: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: true,
-    field: 'last_name',
   })
   lastName: string;
 
   @Column({
     type: DataType.TEXT,
     allowNull: false,
-    field: 'password',
   })
   password: string;
 
@@ -61,7 +71,6 @@ export class User extends Model {
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
-    field: 'role_id',
   })
   roleId: number;
 

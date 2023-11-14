@@ -64,7 +64,8 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
 
 
   constructor(
-    protected repository: any) {}
+    public repository: any
+  ) {}
 
 
   protected getFakeFields(
@@ -77,7 +78,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   /* You can override this method
      to set default values for Entity fields
   */
-  setFakeFields(): Partial<TEntity> {
+  protected setFakeFields(): Partial<TEntity> {
     return {} as Partial<TEntity>;
   }
 
@@ -86,25 +87,29 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
      For example, when you are adding nested entity, you can mutate the parent entity
      Can be called multiple times to add multiple states
   */
-  protected addStates(
+  public addStates(
     states: Partial<TEntity> | Partial<TEntity>[] | (() => Partial<TEntity>) | (() => Partial<TEntity>)[],
-  ): void {
+  ): this
+  {
     if (Array.isArray(states)) {
       const statesArray: Partial<TEntity>[] = states.map(state => (typeof state === 'function') ? state() : state);
       if (statesArray.length > 0) {
         this.statesGenerators.push(this.circularArrayGenerator(statesArray));
       }
-      return;
+      return this;
     }
     this.states = Object.assign(this.states || {}, (typeof states === 'function') ? states() : states);
+    return this;
   }
 
-  setEntityPreprocessor(preprocessor: (fields: Partial<TEntity>, ) => (Partial<TEntity> | Promise<Partial<TEntity>>)): void {
+  public afterMakingCallback(preprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>)): this {
     this.entityPreprocessor = preprocessor;
+    return this;
   }
 
-  setEntityPostprocessor(postprocessor: (entity: TEntity, ) => (TEntity | Promise<TEntity>)): void {
+  public afterCreatingCallback(postprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>)): this {
     this.entityPostprocessor = postprocessor;
+    return this;
   }
 
   /* The same purpose as the states, but you can pass array of states
@@ -152,8 +157,8 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     const entity = await this.repository.create(preprocessedFields, {returning: true});
     this.entityIds.push(this.hasCompositeId() ? this.pickKeysFromObject(entity) : this.getId(entity));
     await this.processNested(entity);
-    this.clearStates();
     const postprocessed = await this.postprocessEntities([entity]);
+    this.clearStates();
     return postprocessed.pop();
   }
 
@@ -218,19 +223,36 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
       .fill(1)
       .map((_, i) => {
         const fields: any = this.getFakeFields(customFields);
-        return this.entityPreprocessor(fields, i);
-      })
-    return Promise.all(bulkInsertDataPromises);
+        return typeof this.entityPreprocessor === 'function'
+          ? this.entityPreprocessor(fields, i)
+          : fields;
+      });
+    return this.sequentialResolver(bulkInsertDataPromises);
   }
 
   protected async postprocessEntities(entities: TEntity[]): Promise<TEntity[]> {
-    if(this.entityPostprocessor) {
-      const postprocessorEntitiesPromises = entities.map((entity, i) => {
-        return this.entityPostprocessor(entity, i);
-      });
-      return Promise.all(postprocessorEntitiesPromises);
+    if(typeof this.entityPostprocessor === 'function') {
+      const postprocessingEntitiesPromises = entities
+        .map((entity, i) => this.entityPostprocessor(entity, i));
+        return this.sequentialResolver(postprocessingEntitiesPromises);
     }
     return entities;
+  }
+
+  protected async sequentialResolver(promises: Promise<any>[] | any[]): Promise<any[]> {
+    const results = [];
+    for (const promise of promises) {
+      if (promise instanceof Promise) {
+        results.push(await promise);
+        continue;
+      }
+      if (typeof promise === 'function') {
+        results.push(await promise());
+        continue;
+      }
+      results.push(promise);
+    }
+    return results;
   }
 
 
@@ -246,10 +268,11 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
       : entities.map(e => this.getId(e));
     this.entityIds.push(...ids);
     if (this.nestedEntities.length) {
-      await Promise.all(entities.map(e => this.processNested(e)));
+      await this.sequentialResolver(entities.map(e => this.processNested(e)));
     }
+    const processedEntities =  this.postprocessEntities(entities);
     this.clearStates();
-    return this.postprocessEntities(entities);
+    return processedEntities;
   }
 
   getIdFieldNames(): string[] {

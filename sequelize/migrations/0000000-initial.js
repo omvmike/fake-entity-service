@@ -100,7 +100,6 @@ const migrationCommands = [
         message: {
           allowNull: false,
           type: Sequelize.TEXT,
-          unique: true,
         },
         created_at: {
           allowNull: false,
@@ -145,7 +144,6 @@ const migrationCommands = [
         message: {
           allowNull: false,
           type: Sequelize.TEXT,
-          unique: true,
         },
         created_at: {
           allowNull: false,
