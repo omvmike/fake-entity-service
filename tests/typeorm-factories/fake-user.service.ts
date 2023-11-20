@@ -24,6 +24,9 @@ export class FakeUserService extends TypeormFakeEntityService<User> {
     };
   }
 
+  asRole(roleId: RoleIds): FakeUserService {
+    return this.addStates({roleId});
+  }
   asAdmin(): FakeUserService {
     this.addStates({roleId: RoleIds.ADMIN});
     return this;
@@ -38,32 +41,4 @@ export class FakeUserService extends TypeormFakeEntityService<User> {
     this.addStates({roleId: RoleIds.MANAGER});
     return this;
   }
-
-  // withCustomer(fakeCustomerService: FakeCustomerService, customFields?: Partial<Customer>): FakeUserService {
-  //   this.nestedEntities.push({
-  //     service: fakeCustomerService,
-  //     count: 1,
-  //     customFields,
-  //     relationFields: {
-  //       parent: 'id',
-  //       nested: 'userId'
-  //     }
-  //   });
-  //   this.addStates({roleId: 3});
-  //   return this;
-  // }
-  //
-  // withConsultant(fakeConsultantService: FakeConsultantService, customFields?: Partial<Customer>): FakeUserService {
-  //   this.nestedEntities.push({
-  //     service: fakeConsultantService,
-  //     count: 1,
-  //     customFields,
-  //     relationFields: {
-  //       parent: 'id',
-  //       nested: 'userId'
-  //     }
-  //   });
-  //   this.addStates({roleId: 2});
-  //   return this;
-  // }
 }

@@ -1,15 +1,6 @@
 import {Model} from "sequelize-typescript";
 import {Op} from "sequelize";
-
-type SingleKeyRelation = {
-  parent: string,
-  nested: string
-};
-
-type MultipleKeyRelations = {
-  parent: string,
-  nested: string
-}[];
+import {FakeEntityCoreService, MultipleKeyRelations, SingleKeyRelation} from "./fake-entity-core.service";
 
 // This type based on Sequelize relations feature
 // so you should describe relation in your model to use it
@@ -20,7 +11,7 @@ type PropertyKeyRelation = {
   propertyKey: string
 };
 
-export class SequelizeFakeEntityService<TEntity extends Model> {
+export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntityCoreService<TEntity> {
 
   // * Array of ids of entities created by this service
   public entityIds = [];
@@ -28,23 +19,23 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
   // * Override id filed name described in model (it's optional)
   public idFieldNames = [];
 
-  protected states?: Partial<TEntity>;
-
-  protected statesGenerators: Generator<Partial<TEntity>>[] = [];
-
-  /* Preprocessor is a function that can be used to mutate entity fields right before entity creation
-    It allows you to get access to entity fields values
-    after all states and statesGenerators and customFields are applied
-    and mutate them.
-  */
-  protected entityPreprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>);
-
-  /* Postprocessor is a function that can be used to mutate entity right after entity creation
-      It allows you to get access to entity fields values
-      Also you can perform side effects related to entity creation.
-      For example if you need to perform some additional actions for each created entity
-   */
-  protected entityPostprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>);
+  // protected states?: Partial<TEntity>;
+  //
+  // protected statesGenerators: Generator<Partial<TEntity>>[] = [];
+  //
+  // /* Preprocessor is a function that can be used to mutate entity fields right before entity creation
+  //   It allows you to get access to entity fields values
+  //   after all states and statesGenerators and customFields are applied
+  //   and mutate them.
+  // */
+  // protected entityPreprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>);
+  //
+  // /* Postprocessor is a function that can be used to mutate entity right after entity creation
+  //     It allows you to get access to entity fields values
+  //     Also you can perform side effects related to entity creation.
+  //     For example if you need to perform some additional actions for each created entity
+  //  */
+  // protected entityPostprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>);
 
 
   protected nestedEntities: {
@@ -56,7 +47,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
 
   protected parentEntities: {
     service: SequelizeFakeEntityService<Model>,
-    // default false, means that exacly one parent will be created and attached for all nested entity declared by createMany(), otherwise parent will be created for each nested entity
+    // default false, means that exactly one parent will be created and attached for all nested entity declared by createMany(), otherwise parent will be created for each nested entity
     each?: boolean,
     customFields?: any,
     relationFields: SingleKeyRelation | MultipleKeyRelations
@@ -64,48 +55,50 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
 
 
   constructor(
-    public repository: any
-  ) {}
-
-
-  protected getFakeFields(
-    customFields?: Partial<TEntity>,
-  ): Partial<TEntity> {
-    const fields: Partial<TEntity> = this.setFakeFields();
-    return Object.assign(fields, this.nextStates(), customFields || {});
+    public repository: any,
+  ) {
+    super();
   }
 
-  /* You can override this method
-     to set default values for Entity fields
-  */
-  protected setFakeFields(): Partial<TEntity> {
-    return {} as Partial<TEntity>;
-  }
 
-  /* The same purpose as the states, but you can pass array of states
-      and its elements will be used as a state for every new entity in round-robin manner.
-   */
-  protected addStatesGenerator(states: Partial<TEntity>[]): void {
-    this.statesGenerators.push(this.circularArrayGenerator(states));
-  }
-
-  protected nextStates(): Partial<TEntity> {
-    const states = this.states || {};
-    if(this.statesGenerators.length) {
-      this.statesGenerators.reduce((acc, gen) => {
-        acc = Object.assign(acc, gen.next().value);
-        return acc;
-      }, states);
-    }
-    return states;
-  }
-
-  protected clearStates(): void {
-    this.states = undefined;
-    this.statesGenerators = [];
-    this.entityPreprocessor = undefined;
-    this.entityPostprocessor = undefined;
-  }
+  // protected getFakeFields(
+  //   customFields?: Partial<TEntity>,
+  // ): Partial<TEntity> {
+  //   const fields: Partial<TEntity> = this.setFakeFields();
+  //   return Object.assign(fields, this.nextStates(), customFields || {});
+  // }
+  //
+  // /* You can override this method
+  //    to set default values for Entity fields
+  // */
+  // protected setFakeFields(): Partial<TEntity> {
+  //   return {} as Partial<TEntity>;
+  // }
+  //
+  // /* The same purpose as the states, but you can pass array of states
+  //     and its elements will be used as a state for every new entity in round-robin manner.
+  //  */
+  // protected addStatesGenerator(states: Partial<TEntity>[]): void {
+  //   this.statesGenerators.push(this.circularArrayGenerator(states));
+  // }
+  //
+  // protected nextStates(): Partial<TEntity> {
+  //   const states = this.states || {};
+  //   if(this.statesGenerators.length) {
+  //     this.statesGenerators.reduce((acc, gen) => {
+  //       acc = Object.assign(acc, gen.next().value);
+  //       return acc;
+  //     }, states);
+  //   }
+  //   return states;
+  // }
+  //
+  // protected clearStates(): void {
+  //   this.states = undefined;
+  //   this.statesGenerators = [];
+  //   this.entityPreprocessor = undefined;
+  //   this.entityPostprocessor = undefined;
+  // }
 
   protected async processSequelizeRelation(newParent: TEntity, nested: any): Promise<void> {
     const nestedEntities = await nested.service.createMany(nested.count,{
@@ -159,53 +152,53 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     this.parentEntities = [];
   }
 
-  protected async preprocessEntities(
-    count: number,
-    customFields?: Partial<TEntity>,
-  ): Promise<Partial<TEntity>[]> {
-    const bulkInsertDataPromises = Array(count)
-      .fill(1)
-      .map((_, i) => {
-        const fields: any = this.getFakeFields(customFields);
-        return typeof this.entityPreprocessor === 'function'
-          ? this.entityPreprocessor(fields, i)
-          : fields;
-      });
-    return this.sequentialResolver(bulkInsertDataPromises);
-  }
+  // protected async preprocessEntities(
+  //   count: number,
+  //   customFields?: Partial<TEntity>,
+  // ): Promise<Partial<TEntity>[]> {
+  //   const bulkInsertDataPromises = Array(count)
+  //     .fill(1)
+  //     .map((_, i) => {
+  //       const fields: any = this.getFakeFields(customFields);
+  //       return typeof this.entityPreprocessor === 'function'
+  //         ? this.entityPreprocessor(fields, i)
+  //         : fields;
+  //     });
+  //   return this.sequentialResolver(bulkInsertDataPromises);
+  // }
+  //
+  // protected async postprocessEntities(entities: TEntity[]): Promise<TEntity[]> {
+  //   if(typeof this.entityPostprocessor === 'function') {
+  //     const postprocessingEntitiesPromises = entities
+  //       .map((entity, i) => this.entityPostprocessor(entity, i));
+  //       return this.sequentialResolver(postprocessingEntitiesPromises);
+  //   }
+  //   return entities;
+  // }
 
-  protected async postprocessEntities(entities: TEntity[]): Promise<TEntity[]> {
-    if(typeof this.entityPostprocessor === 'function') {
-      const postprocessingEntitiesPromises = entities
-        .map((entity, i) => this.entityPostprocessor(entity, i));
-        return this.sequentialResolver(postprocessingEntitiesPromises);
-    }
-    return entities;
-  }
-
-  protected async sequentialResolver(promises: Promise<any>[] | any[]): Promise<any[]> {
-    const results = [];
-    for (const promise of promises) {
-      if (promise instanceof Promise) {
-        results.push(await promise);
-        continue;
-      }
-      if (typeof promise === 'function') {
-        results.push(await promise());
-        continue;
-      }
-      results.push(promise);
-    }
-    return results;
-  }
-
-  protected *circularArrayGenerator(arr) {
-    let index = 0;
-    while (true) {
-      yield arr[index];
-      index = (index + 1) % arr.length;
-    }
-  }
+  // protected async sequentialResolver(promises: Promise<any>[] | any[]): Promise<any[]> {
+  //   const results = [];
+  //   for (const promise of promises) {
+  //     if (promise instanceof Promise) {
+  //       results.push(await promise);
+  //       continue;
+  //     }
+  //     if (typeof promise === 'function') {
+  //       results.push(await promise());
+  //       continue;
+  //     }
+  //     results.push(promise);
+  //   }
+  //   return results;
+  // }
+  //
+  // protected *circularArrayGenerator(arr) {
+  //   let index = 0;
+  //   while (true) {
+  //     yield arr[index];
+  //     index = (index + 1) % arr.length;
+  //   }
+  // }
 
   protected pickKeysFromObject(obj: any): any {
     return this.getIdFieldNames()
@@ -273,52 +266,52 @@ export class SequelizeFakeEntityService<TEntity extends Model> {
     return processedEntities;
   }
 
-  /* Add fields to be used when creating entities
-     Main purpose is to set fields as a side effect of service methods
-     For example, when you are adding nested entity, you can mutate the parent entity
-     Can be called multiple times to add multiple states
-  */
-  public addStates(
-    states: Partial<TEntity> | Partial<TEntity>[] | (() => Partial<TEntity>) | (() => Partial<TEntity>)[],
-  ): this
-  {
-    if (Array.isArray(states)) {
-      const statesArray: Partial<TEntity>[] = states.map(state => (typeof state === 'function') ? state() : state);
-      if (statesArray.length > 0) {
-        this.statesGenerators.push(this.circularArrayGenerator(statesArray));
-      }
-      return this;
-    }
-    this.states = Object.assign(this.states || {}, (typeof states === 'function') ? states() : states);
-    return this;
-  }
+  // /* Add fields to be used when creating entities
+  //    Main purpose is to set fields as a side effect of service methods
+  //    For example, when you are adding nested entity, you can mutate the parent entity
+  //    Can be called multiple times to add multiple states
+  // */
+  // public addStates(
+  //   states: Partial<TEntity> | Partial<TEntity>[] | (() => Partial<TEntity>) | (() => Partial<TEntity>)[],
+  // ): this
+  // {
+  //   if (Array.isArray(states)) {
+  //     const statesArray: Partial<TEntity>[] = states.map(state => (typeof state === 'function') ? state() : state);
+  //     if (statesArray.length > 0) {
+  //       this.statesGenerators.push(this.circularArrayGenerator(statesArray));
+  //     }
+  //     return this;
+  //   }
+  //   this.states = Object.assign(this.states || {}, (typeof states === 'function') ? states() : states);
+  //   return this;
+  // }
+  //
+  // public afterMakingCallback(preprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>)): this {
+  //   this.entityPreprocessor = preprocessor;
+  //   return this;
+  // }
+  //
+  // public afterCreatingCallback(postprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>)): this {
+  //   this.entityPostprocessor = postprocessor;
+  //   return this;
+  // }
+  //
+  // public addFieldSequence<K extends keyof TEntity>(field: K, values: TEntity[K][]): this {
+  //   this.addStatesGenerator(values.map(value => {
+  //     const state = {} as Partial<TEntity>;
+  //     state[field] = value;
+  //     return state;
+  //   }));
+  //   return this;
+  // }
 
-  public afterMakingCallback(preprocessor: (fields: Partial<TEntity>, index: number) => (Partial<TEntity> | Promise<Partial<TEntity>>)): this {
-    this.entityPreprocessor = preprocessor;
-    return this;
-  }
-
-  public afterCreatingCallback(postprocessor: (entity: TEntity, index: number) => (TEntity | Promise<TEntity>)): this {
-    this.entityPostprocessor = postprocessor;
-    return this;
-  }
-
-  public addFieldSequence<K extends keyof TEntity>(field: K, values: TEntity[K][]): this {
-    this.addStatesGenerator(values.map(value => {
-      const state = {} as Partial<TEntity>;
-      state[field] = value;
-      return state;
-    }));
-    return this;
-  }
-
-  //* Delete all entities created by this service
-  public async cleanup(): Promise<number> {
-    if(!this.entityIds.length) {
-      return 0;
-    }
-    return this.delete(this.entityIds);
-  }
+  // //* Delete all entities created by this service
+  // public async cleanup(): Promise<number> {
+  //   if(!this.entityIds.length) {
+  //     return 0;
+  //   }
+  //   return this.delete(this.entityIds);
+  // }
 
   public async delete(entityIds): Promise<number> {
     const where = {};

@@ -185,6 +185,22 @@ describe('Test SequelizeFakeEntityService can create and cleanup DB entities', (
     await fakePostService.cleanup();
   });
 
+  it('should create array sequence with function', async () => {
+    const posts = await fakePostService
+      .withParentUser(fakeUserService.asRole(RoleIds.CUSTOMER))
+      .addStates(() => ([{message: 'one'}, {message: 'two'}, {message: 'three'}]))
+      .afterMakingCallback((post, index) => {
+        console.log('afterMakingCallback', post, index);
+        return post;
+      })
+      .createMany(5);
+    expect(posts).toBeDefined();
+    expect(posts.length).toBe(5);
+    const messages = posts.map(post => post.message);
+    expect(messages).toEqual(['one', 'two', 'three', 'one', 'two']);
+    await fakePostService.cleanup();
+  });
+
   it('should create array sequence and afterMakingCallback', async () => {
     const posts = await fakePostService
       .withParentUser(fakeUserService.asRole(RoleIds.CUSTOMER))
