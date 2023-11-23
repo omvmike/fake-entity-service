@@ -67,7 +67,6 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
         });
       }
     }
-    this.nestedEntities = [];
   }
 
 
@@ -90,7 +89,6 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
       });
       this.addStatesGenerator(relatedFieldsArray);
     }
-    this.parentEntities = [];
   }
 
   protected pickKeysFromObject(obj: any): any {
@@ -138,6 +136,9 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
     this.entityIds.push(this.getId(entity));
     await this.processNested(entity);
     const postprocessed = await this.postprocessEntities([entity]);
+    // cleanup
+    this.nestedEntities = [];
+    this.parentEntities = [];
     this.clearStates();
     return postprocessed.pop();
   }
@@ -155,6 +156,9 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
       await this.sequentialResolver(entities.map(e => this.processNested(e)));
     }
     const processedEntities =  await this.postprocessEntities(entities);
+    // cleanup
+    this.nestedEntities = [];
+    this.parentEntities = [];
     this.clearStates();
     return processedEntities;
   }

@@ -76,7 +76,6 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
       });
       this.addStatesGenerator(relatedFieldsArray);
     }
-    this.parentEntities = [];
   }
 
   protected async processNested(newParent: TEntity): Promise<void> {
@@ -93,7 +92,6 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
         ...relatedFields
       })
     }
-    this.nestedEntities = [];
   }
 
   async create(
@@ -109,6 +107,9 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     this.entityIds.push(this.getId(entity));
     await this.processNested(entity);
     const postprocessed = await this.postprocessEntities([entity]);
+    // cleanup
+    this.nestedEntities = [];
+    this.parentEntities = [];
     this.clearStates();
     return postprocessed.pop();
   }
@@ -118,12 +119,6 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     customFields?: Partial<TEntity>,
   ): Promise<TEntity[]> {
     await this.processParents(count);
-    // const bulkInsertData = Array(count)
-    //   .fill(1)
-    //   .map(() => {
-    //     const fields: any = this.getFakeFields(customFields);
-    //     return this.repository.create(fields)
-    //   });
     const preprocessed = await this.preprocessEntities(count, customFields);
     // @ts-ignore
     const bulkInsertData = preprocessed.map(f => this.repository.create(f))
@@ -133,7 +128,10 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     if (this.nestedEntities.length) {
       await Promise.all(entities.map(e => this.processNested(e)));
     }
-    const processedEntities =  this.postprocessEntities(entities);
+    const processedEntities =  await this.postprocessEntities(entities);
+    // cleanup
+    this.nestedEntities = [];
+    this.parentEntities = [];
     this.clearStates();
     return processedEntities;
   }
