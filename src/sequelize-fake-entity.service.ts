@@ -46,32 +46,11 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
       ...(nested.customFields ?? {})
     });
     // add nested entities to each parent
-    const nestedEntitiesChunks = nestedEntities.chunk(newParents.length);
     for (let i = 0; i < newParents.length; i++) {
-      await newParents[i].$add(nested.relationFields.propertyKey, nestedEntitiesChunks[i]);
+      let nestedEntitiesChunk = nestedEntities.splice(0, newParents.length);
+      await newParents[i].$add(nested.relationFields.propertyKey, nestedEntitiesChunk);
     }
   }
-  // protected async processNested(newParent: TEntity): Promise<void> {
-  //   for (const nested of this.nestedEntities) {
-  //     if ('propertyKey' in nested.relationFields && nested.relationFields.propertyKey) {
-  //       await this.processSequelizeRelation(newParent, nested);
-  //     } else {
-  //       const nestedRelationFields = Array.isArray(nested.relationFields)
-  //         ? nested.relationFields
-  //         : [nested.relationFields];
-  //       const relatedFields = nestedRelationFields.reduce((acc, f) => {
-  //         if ('parent' in f && 'nested' in f) {
-  //           acc[f.nested] = newParent[f.parent];
-  //         }
-  //         return acc;
-  //       }, {});
-  //       await nested.service.createMany(nested.count, {
-  //         ...(nested.customFields ?? {}),
-  //         ...relatedFields
-  //       });
-  //     }
-  //   }
-  // }
 
   protected async processNested(newParents: TEntity[]): Promise<void> {
     for (const nested of this.nestedEntities) {

@@ -76,22 +76,37 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
       });
       this.addStatesGenerator(relatedFieldsArray);
     }
+    this.parentEntities = [];
   }
 
-  protected async processNested(newParent: TEntity): Promise<void> {
+  protected async processNested(newParents: TEntity[]): Promise<void> {
     for (const nested of this.nestedEntities) {
       const nestedRelationFields = Array.isArray(nested.relationFields)
         ? nested.relationFields
         : [ nested.relationFields ];
-      const relatedFields = nestedRelationFields.reduce((acc, f) => {
-        acc[f.nested] = newParent[f.parent];
-        return acc;
-      }, {});
-      await nested.service.createMany(nested.count, {
-        ...(nested.customFields ?? {}),
-        ...relatedFields
-      })
+      const relatedFieldsArray = newParents
+        .map(newParent => {
+          const relatedFields = nestedRelationFields.reduce((acc, f) => {
+            if ('parent' in f && 'nested' in f) {
+              acc[f.nested] = newParent[f.parent];
+            }
+            return acc;
+          }, {});
+          return relatedFields;
+        })
+        .reduce((acc: any[], fields) => {
+          // this leads to sequential adding of nested entities for each parent
+          return acc.concat(Array(nested.count).fill(fields));
+        }, [])
+      await nested.service
+        .addStates(relatedFieldsArray)
+        .createMany(
+          nested.count * newParents.length,
+          {
+            ...(nested.customFields ?? {}),
+          });
     }
+    this.nestedEntities = [];
   }
 
   async create(
@@ -105,11 +120,11 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     const created = this.repository.create(preprocessedFields as DeepPartial<TEntity>);
     const entity = await this.repository.save(created);
     this.entityIds.push(this.getId(entity));
-    await this.processNested(entity);
+    if (this.nestedEntities.length) {
+      await this.processNested([entity]);
+    }
     const postprocessed = await this.postprocessEntities([entity]);
     // cleanup
-    this.nestedEntities = [];
-    this.parentEntities = [];
     this.clearStates();
     return postprocessed.pop();
   }
@@ -126,12 +141,10 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     const ids = entities.map(e => this.getId(e));
     this.entityIds.push(...ids);
     if (this.nestedEntities.length) {
-      await Promise.all(entities.map(e => this.processNested(e)));
+      await this.processNested(entities);
     }
     const processedEntities =  await this.postprocessEntities(entities);
     // cleanup
-    this.nestedEntities = [];
-    this.parentEntities = [];
     this.clearStates();
     return processedEntities;
   }
