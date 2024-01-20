@@ -118,10 +118,12 @@ export class FakeUserService extends SequelizeFakeEntityService<User> {
 }  
 ```
 
-Additionally to constructor you usually need to describe `setFakeFields` method to generate fake data.
-It's a basic option to generate fake data. 
+Additionally to `constructor` method you usually want to describe `setFakeFields` method to generate fake data.
 This method is describes default values for the entity fields.
 You can override these values in the `create` and `createMany` methods later to generate specific data for your tests.
+However you can skip this method. 
+In this case you need to pass all required fields to the `create` and `createMany` methods.
+
 It's convenient to use some data generation library like `faker-js` to generate fake data for your tests but you can 
 use any other library or even write your own data generation code.
 It's also possible to describe nested entities and parent entities. See below.
@@ -317,62 +319,219 @@ You can find more examples in the `tests` folder of the repository.
 
 ## Features
 
-Also you can describe nested entities and create them with the parent entity.
+### Create related entities
 
+Usually your entities have relations with other entities and you need to create them together.
+For example, you have `User`, `Post` and `Comment` models. 
+Every user has many posts and every post has many comments
+as well as every post belongs to a user and every comment belongs to a post.
+
+ORMs usually provide a way to describe these relations in the terms like `hasMany`, `belongsTo`, `hasOne` etc.
+
+But from the database entity creation point of view, you need to create a user, then create a post and then create a comment.
+And you cannot create a comment without having a post.
+That's why we mostly interested in the sequence of entity creation.
+The library allows you to describe this sequence explicitly using `withParent` and `withNested` methods.
+- withParent - describes a parent entity that your current entity depends on. 
+> This parent entity will be created before your current entity and will be attached to it.
+- withNested - describes a nested entity that depends on your current entity.
+> This nested entity will be created after your current entity and will be attached to it.
+
+To attach entities you usually need to specify a foreign key.
+The library uses the following convention to detect foreign keys:
+```json
+{
+  "parent": "<parent entity property name>",
+  "nested": "<nested entity property name>"
+}
+```
+So parent field is usually a primary key of the parent entity and nested field is usually a foreign key of the nested entity.
+
+You can describe these relations in your entity service class like below:
 ```typescript
-import {faker} from '@faker-js/faker';
-import {SequelizeFakeEntityService} from "fake-entity-service";
-import {InjectModel} from "@nestjs/sequelize";
-import {User} from "../../src/entities";
+export class FakePostService extends SequelizeFakeEntityService<Post> {
+    constructor(
+        public repository: typeof Post,
+    ) {
+        super(repository)
+    }
 
-@Injectable()
-export class FakeUserService extends SequelizeFakeEntityService<User> {
-  constructor(
-    @InjectModel(User)
-    public repository: typeof User,
-  ) {
-    super(repository)
-  }
+    setFakeFields(): Partial<Post> {
+        return {
+            message: faker.lorem.sentence()
+        }
+    }
 
-  setFakeFields(): Partial<User> {
-    return {
-      email: faker.internet.email(name),
-      firstName: faker.name.firstName(),
-      lastName: faker.name.lastName(),
-      password: 'password-hash',
-      roleId: 1,
-    };
-  }
+    withParentUser(fakeUserService: FakeUserService, each = false, userFields?: Partial<Post>): FakePostService {
+        return this.withParent(fakeUserService,
+            {
+                parent: 'id',
+                nested: 'userId'
+            },
+            each,
+            userFields) as FakePostService;
+    }
 
-  withNotifications(fakeNotificationService: FakeNotificationService, count: number, customFields?: Partial<Notification>): FakeUserService {
-    this.nestedEntities.push({
-      service: fakeNotificationService,
-      count,
-      customFields,
-      relationFields: {
-        parent: 'id',
-        nested: 'userId'
-      }
-    });
-    return this;
-  }
+    withComments(fakeCommentService: FakeCommentService, count = 1, commentFields?: Partial<Comment>): FakePostService {
+        return this.withNested(
+            fakeCommentService,
+            {
+                parent: 'id',
+                nested: 'postId'
+            },
+            count,
+            commentFields) as FakePostService;
+    }
+
+
 }
 ```
 and use it like below:
 
 ```typescript
-const customers = await fakeUserService
-  .withNotifications(fakeNotificationService, 2)
-  .createMany(5, { roleId: Role.CUSTOMER });
+const posts = await fakePostService
+    .withParentUser(fakeUserService.asRole(RoleIds.CUSTOMER))
+    .withComments(fakeCommentService, 2)
+    .createMany(5);
+```
+This code should create 5 posts but since posts depend on users as parent entities 
+it will create user entities first and then create posts and attach them to the users.
+
+You can notice that withParentUser method has `each` parameter set to false.
+That means that it will create only one user and attach all posts to this user.
+If you need to create a new user for each post, you need to set `each` parameter to true.
+
+Then it creates 2 comments for each of the five posts.
+
+#### Many-to-many relations
+Many-to-many relations are a bit more complicated because they require a third table to store the relation.
+It's not covered by relations convention described above.
+So you need to describe it with creation one of two entities separately and then attach them to each other.
+
+But if you use Sequelize, you can use `Sequelize's relations with the library.
+See [Sequelize specific features](#sequelize-specific-features) section below.
+
+
+### States
+
+You might need to describe some mutations of your entity.
+For example, you need to create a user with a specific role.
+
+You can use `addStates` method to describe these mutations.
+For example you can describe `asAdmin` method for your `FakeUserService` class like below:
+```typescript
+export class FakeUserService extends SequelizeFakeEntityService<User> {
+   // constructor and other methods
+   // ... 
+    
+    asAdmin(): FakeUserService {
+        return this.addStates({roleId: Roles.ADMIN});
+    }
+}
 ```
 
-This code creates 5 users with customer role and 2 notifications for each user.
+and then use it like below:
+```typescript
+const users = await fakeUserService
+    .asAdmin()
+    .createMany(5);
+```
 
-You can also delete all created entities with `cleanup` method:
+As a result you will get 5 users with admin role.
+
+
+
+### Sequences
+
+Sometimes you need to create entities with different but predefined sets of values.
+
+For example, you need to create 5 users with different names.
+
+You can also use `addStates` method to create a sequence of entities with different values for several fields:
+```typescript
+const users = await fakeUserService
+    .addStates([
+        {firstName: 'John', lastName: 'Smith'},
+        {firstName: 'Mike', lastName: 'Brown'},
+        {firstName: 'Bob', lastName: 'White'},
+        {firstName: 'Alice', lastName: 'Black'},
+        {firstName: 'Kate', lastName: 'Green'},
+    ])
+    .createMany(5);
+```
+This code will create 5 users with names: John Smith, Mike Brown, Bob White, Alice Black, Kate Green.
+
+If you specify less than 5 states, the library will loop them to create 5 users you requested with createMany method.
+
+If you specify more than 5 states, the library will create only 5 users with the first 5 states.
+
+You can also provide a function to generate array of states dynamically:
+```typescript
+const users = await fakeUserService
+    .addStates(() => {
+        const states = [];
+        for (let i = 0; i < 5; i++) {
+            states.push({firstName: faker.name.firstName(), lastName: faker.name.lastName()});
+        }
+        return states;
+    })
+    .createMany(5);
+```
+
+In advance use addFieldSequence() method to create a sequence of entities with different values for one field:
+```typescript
+const users = await fakeUserService
+    .addFieldSequence('firstName', ['John', 'Mike', 'Bob', 'Alice', 'Kate'])
+    .createMany(5);
+```
+
+
+### Cleanup created entities
+
+The library remembers all created entities primary keys and provides a `cleanup` method to delete them.
 
 ```typescript
 await fakeUserService.cleanup();
 ```
+this code will delete all users created by the `fakeUserService` service.
+
+
+### Callbacks
+
+You can use `afterMakingCallback` and `afterCreatingCallback` methods to describe callbacks.
+
+`afterMakingCallback` is called after the entity is prepared but before it is saved to the database.
+> Thus, you can use it to modify the entity right before it is saved to the database 
+> but after all other modifications (Custom fields, States, Foreign keys) already applied.
+
+for example, you can use it to set a password for the user:
+```typescript
+const users = await fakeUserService
+    .afterMakingCallback(async (user, index) => {
+        user.password = await bcrypt.hash('password', 10);
+        return user;
+    })
+    .createMany(5);
+```
+
+
+`afterCreatingCallback` is called after the entity is saved to the database.
+> Thus, you can use it to modify the result value returned by the `create` and `createMany` methods
+> or to do some additional actions after the entity is saved to the database.
+
+for example, you can use it to reload the entity with all relations after all nested entities are created:
+```typescript
+const posts = await fakePostService
+    .withParentUser(fakeUserService.asRole(RoleIds.CUSTOMER))
+    .withComments(fakeCommentService, 3)
+    .afterCreatingCallback(async (post, index) => {
+        return post.reload({
+            include: [{model: Comment}, {model: User}],
+        });
+    })
+    .createMany(2);
+```
+
 
 ## Sequelize specific features
 
@@ -393,81 +552,3 @@ await fakeUserService.cleanup();
     return this;
   }
 ```
-
-- The library has addSequence() method that helps you generate of sequence of entities. 
-
-> For example, you can create 3 users with specific roles like below:
-```typescript
-const users = await fakeUserService
-  .addSequence('roleId',[RoleIds.ADMIN, RoleIds.CUSTOMER, RoleIds.MANAGER])
-  .createMany(3);
-```
-> as a result you will get 3 users with roles: admin, customer, manager.
-> 
-> The sequences are looped, so you can create 5 users with 3 roles and get 2 users with admin role and 2 users with customer role and 1 user with manager role.
-> 
-
-> This feature is built on top of protected addStatesGenerator() method so you can get even more flexibility when build your own inherited entity services by describing not only static states but also dynamic states.
-> 
-> here's an example of add sequence method implementation for the `FakeUserService` class:
-```typescript
-  addSequence(roles: RoleIds[]): FakeUserService {
-      this.addStatesGenerator(roles.map(roleId => ({
-        roleId,
-      })));
-      return this;
-  }
-```
-
-- As well as nested entities you can also describe parent entities from which you current entity depends on. For example, you can create a user with a custom role and then attach it to the user.
-
-> Here's an example of `withCustomRole` method implementation for the `FakeUserService` class:
-```typescript 
-withCustomRole(fakeRoleService: FakeRoleService, roleFields?: Partial<Role>): FakeUserService {
-    this.parentEntities.push({
-      service: fakeRoleService,
-      each: false, // if you need to create a new role for each user
-      customFields: roleFields, // custom fields for the parentb entity
-      relationFields: {
-        parent: 'id', // the name of the relation property in the parent Role model
-        nested: 'roleId' // the name of the relation property in the nested User model
-      }
-    });
-    return this;
-}
-```
-
-Then you can use it like below:
-
-```typescript
-const customers = await fakeUserService
-  .withCustomRole(fakeRoleService, {name: 'super-customer'})
-  .createMany(5);
-```
-
-> If you need to create a new role for each user, you can use `each: true` option.
-> 
-> Here's an example of `withCustomRole` method implementation for the `FakeUserService` class:
-```typescript
-withCustomRole(fakeRoleService: FakeRoleService, roleFields?: Partial<Role>): FakeUserService {
-    this.parentEntities.push({
-      service: fakeRoleService,
-      each: true, // if you need to create a new role for each user
-      customFields: roleFields, // custom fields for the parentb entity
-      relationFields: {
-        parent: 'id', // the name of the relation property in the parent Role model
-        nested: 'roleId' // the name of the relation property in the nested User model
-      }
-    });
-    return this;
-}
-```
-
-Then you can use it like below:
-```typescript
-const users = await fakeUserService.withCustomRole(fakeRoleService.addSequence('name', ['first', 'second', 'third'])).createMany(3);
-```
-> as a result you will get 3 users with roles: first, second, third.
-
->> You can also use `addSequence` method to generate a sequence of parent entities with different names.
->> Using addSequence could be very helpful if yo want to generate a sequence of entities with specific unique field values.
