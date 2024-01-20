@@ -512,6 +512,31 @@ await fakeUserService.cleanup();
 ```
 this code will delete all users created by the `fakeUserService` service.
 
+#### Primary keys
+
+As you can see in the examples above, we need to describe primary key column name for the entity model
+to track created entities and to delete them later.
+
+Primary key description is ORM specific.
+
+For Sequelize we support automatic detection of primary keys both for single column and multi-column primary keys.
+see [Sequelize specific features](#sequelize-specific-features) section below.
+
+Unfortunately, automatic detection of primary keys is not applied for TypeORM version of the library.
+Thus, we use `id` field as a default primary key column for TypeORM.
+But you can override it by passing `idFieldName` property to your service class:
+
+```typescript
+import {TypeormFakeEntityService} from "./typeorm-fake-entity.service";
+
+export class FakeUserService extends TypeormFakeEntityService<User> {
+    public idFieldName = 'uuid';
+
+    // ...
+    // constructor and other methods
+}
+```
+Multi-column primary keys are not supported for `TypeormFakeEntityService` yet. 
 
 ### Callbacks
 
@@ -557,15 +582,21 @@ const posts = await fakePostService
 - The library can work with Sequelize's relations. If you described relations in your model, the library will use them to create nested entities.
 > For example, if you have `User` and `Notification` models and `User.hasMany(Notification)` relation, you can describe `withNotifications` method from previous example like below:
 ```typescript
-  withNotifications(fakeNotificationService: FakeNotificationService, count: number, customFields?: Partial<Notification>): FakeUserService {
-    this.nestedEntities.push({
-      service: fakeNotificationService,
-      count,
-      customFields,
-      relationFields: {
-        propertyKey: 'notifications', // the name of the relation property in the model
-      }
-    });
-    return this;
-  }
+export class FakePostService extends SequelizeFakeEntityService<Post> {
+    // constructor and other methods
+    // ... 
+
+
+    withNotifications(fakeNotificationService: FakeNotificationService, count: number, customFields?: Partial<Notification>): FakeUserService {
+        this.nestedEntities.push({
+            service: fakeNotificationService,
+            count,
+            customFields,
+            relationFields: {
+                propertyKey: 'notifications', // the name of the relation property in the model
+            }
+        });
+        return this;
+    }
+}
 ```
