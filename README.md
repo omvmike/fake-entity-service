@@ -128,6 +128,36 @@ It's convenient to use some data generation library like `faker-js` to generate 
 use any other library or even write your own data generation code.
 It's also possible to describe nested entities and parent entities. See below.
 
+#### create a new fake entity service for TypeORM example
+
+```typescript
+import {Repository} from "typeorm";
+
+export class FakeUserService extends TypeormFakeEntityService<User> {
+    constructor(
+        public repository: Repository<User>,
+    ) {
+        super(repository)
+    }
+
+    setFakeFields(): Partial<User> {
+        const seed = String(Math.random() * 100000);
+        const name = faker.name.firstName() + seed
+        return {
+            email: faker.internet.email(name),
+            firstName: faker.name.firstName(),
+            lastName: faker.name.lastName(),
+            password: 'password',
+            roleId: 1,
+        };
+    }
+
+}
+```
+Key difference that we're injecting TypeORM repository instead of Sequelize model.
+
+
+
 ### How to use a fake entity service with NestJS and Sequelize
 
 Okay, now you have a `FakeUserService. How to use it in your tests?
@@ -576,8 +606,10 @@ const posts = await fakePostService
 
 
 ## Sequelize specific features
+- Use Sequelize's primary keys detection. The library uses Sequelize's model `primaryKeyAttributes` property to detect primary keys.
+> If you need to override it, you can pass `idFieldName` property to your service class:
 
-- The library can fork with multi-column primary keys. It uses Sequelize's model `primaryKeyAttributes` property to detect them.
+- The library can work with multi-column primary keys. It also Sequelize's model `primaryKeyAttributes` property to detect them.
 
 - The library can work with Sequelize's relations. If you described relations in your model, the library will use them to create nested entities.
 > For example, if you have `User` and `Notification` models and `User.hasMany(Notification)` relation, you can describe `withNotifications` method from previous example like below:
