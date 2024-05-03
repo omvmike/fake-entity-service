@@ -22,7 +22,7 @@ services:
     image: postgres:14-alpine
     user: postgres
     ports:
-      - "5432:5432"
+      - "54323:5432"
     environment:
       POSTGRES_USER: tester
       POSTGRES_PASSWORD: test-pwd

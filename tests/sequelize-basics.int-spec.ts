@@ -11,6 +11,8 @@ import {Comment} from "./sequelize-models/comment.entity";
 import {FakeCommentService} from "./sequelize-factories/fake-comment.service";
 
 const sequelize = new Sequelize({
+  host: 'localhost',
+  port: 54323,
   database: 'test-db',
   dialect: 'postgres',
   username: 'tester',

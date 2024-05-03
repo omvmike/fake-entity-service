@@ -1,5 +1,3 @@
-import {Model} from "sequelize-typescript";
-
 export type SingleKeyRelation = {
   parent: string,
   nested: string

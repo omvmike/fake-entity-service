@@ -3,7 +3,7 @@ module.exports = {
   local: {
     dialect: 'postgres',
     host: 'localhost',
-    port: 5432,
+    port: 54323,
     username: 'tester',
     password: 'test-pwd',
     database: 'test-db',

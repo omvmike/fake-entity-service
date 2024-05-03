@@ -7,6 +7,8 @@ import {Post} from "./typeorm-models/post.entity";
 import {Comment} from "./typeorm-models/comment.entity";
 import {FakeCommentService} from "./typeorm-factories/fake-comment.service";
 const PostgresDataSource = new DataSource({
+  host: 'localhost',
+  port: 54323,
   type: 'postgres',
   database: 'test-db',
   username: 'tester',
