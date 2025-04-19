@@ -632,3 +632,34 @@ export class FakePostService extends SequelizeFakeEntityService<Post> {
     }
 }
 ```
+
+- The library support database transactions. You can pass a transaction to the `create` and `createMany` methods.
+```typescript
+const transaction = await sequelize.transaction();
+const user = await fakeUserService.create({firstName: 'John'}, transaction);
+await transaction.commit();
+```
+It also allows yo to follow transactional flow into tests
+```typescript
+describe('Test SequelizeFakeEntityService with transactions', () => {
+  let transaction: Transaction;
+
+  beforeEach(async () => {
+    transaction = await sequelize.transaction();
+  });
+
+  afterEach(async () => {
+    await transaction.rollback();
+  });
+
+  it('should create user within transaction', async () => {
+    const user = await fakeUserService.create({}, transaction);
+    expect(user).toBeDefined();
+    expect(user.id).toBeDefined();
+    expect(user.email).toBeDefined();
+    expect(user.firstName).toBeDefined();
+    expect(user.lastName).toBeDefined();
+  });
+...  
+```
+See more examples in [sequelize-basics-transactional.int-spec.ts](tests/sequelize-basics-transactional.int-spec.ts)folder of the repository.
