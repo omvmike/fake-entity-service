@@ -1,6 +1,6 @@
 {
   "name": "fake-entity-service",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "A fake database entities service for testing",
   "author": {
     "email": "mike.onofrienko@clockwise.software",
