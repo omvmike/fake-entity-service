@@ -36,7 +36,13 @@ describe('Test SequelizeFakeEntityService with transactions', () => {
   });
 
   afterEach(async () => {
-    await transaction.rollback();
+    if ((transaction as any).finished === 'rollback') {
+      console.log('Transaction is already rolled back. skipping final rollback.');
+    } else if ((transaction as any).finished === 'commit') {
+      console.log('Transaction is already committed. skipping final rollback.');
+    } else {
+      await transaction.rollback();
+    }
   });
 
   it('should create user within transaction', async () => {
