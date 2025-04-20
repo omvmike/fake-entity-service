@@ -8,8 +8,6 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
   public entityIds = [];
   public idFieldName = 'id';
 
-  // protected states?: Partial<TEntity>;
-
   protected nestedEntities: {
     service: TypeormFakeEntityService<any>,
     count: number,
@@ -64,32 +62,33 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     return callback();
   }
 
-  // protected getFakeFields(
-  //   customFields?: Partial<TEntity>,
-  // ): Partial<TEntity> {
-  //   const fields: Partial<TEntity> = this.setFakeFields();
-  //   return Object.assign(fields, this.states || {}, customFields || {});
-  // }
-  //
-  // /* You can override this method
-  //    to set default values for Entity fields
-  // */
-  // setFakeFields(): Partial<TEntity> {
-  //   return {} as Partial<TEntity>;
-  // }
+  protected getFakeFields(
+    customFields?: Partial<TEntity>,
+  ): Partial<TEntity> {
+    return super.getFakeFields(customFields);
+  }
+  
+  /* You can override this method
+     to set default values for Entity fields
+  */
+  protected setFakeFields(): Partial<TEntity> {
+    return super.setFakeFields();
+  }
 
   /* Add fields to be used when creating entities
      Main purpose is to set fields as a side effect of service methods
      For example, when you are adding nested entity, you can mutate the parent entity
      Can be called multiple times to add multiple states
   */
-  // protected addStates(state: Partial<TEntity>): void {
-  //   this.states = Object.assign(this.states || {}, state);
-  // }
+  public addStates(
+    states: Partial<TEntity> | Partial<TEntity>[] | (() => Partial<TEntity>) | (() => Partial<TEntity>)[] | (() => Partial<TEntity>[]),
+  ): this {
+    return super.addStates(states);
+  }
 
-  // protected clearStates(): void {
-  //   this.states = undefined;
-  // }
+  protected clearStates(): void {
+    super.clearStates();
+  }
 
   protected async processParents(nestedCount = 1, transaction?: EntityManager): Promise<void> {
     for (const parentEntityConfig of this.parentEntities) {
@@ -180,7 +179,8 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
         ? await this.entityPreprocessor(fields, 0)
         : fields;
       const created = this.repository.create(preprocessedFields as DeepPartial<TEntity>);
-      const repo = tx.getRepository(this.repository.target);
+      // Use tx if available, otherwise use this.repository
+      const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
       const entity = await repo.save(created);
       this.entityIds.push(this.getId(entity));
       if (this.nestedEntities.length) {
@@ -226,7 +226,8 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
       const preprocessed = await this.preprocessEntities(count, customFields);
       // @ts-ignore
       const bulkInsertData = preprocessed.map(f => this.repository.create(f))
-      const repo = tx.getRepository(this.repository.target);
+      // Use tx if available, otherwise use this.repository
+      const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
       const entities = await repo.save(bulkInsertData as DeepPartial<TEntity>[]);
       const ids = entities.map(e => this.getId(e));
       this.entityIds.push(...ids);
@@ -267,7 +268,8 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
    */
   async delete(ids: any[], transaction?: EntityManager): Promise<number> {
     return this.withTransaction(async (tx) => {
-      const repo = tx.getRepository(this.repository.target);
+      // Use tx if available, otherwise use this.repository
+      const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
       const res = await repo.delete(ids);
       return res.affected || 0;
     }, transaction);
