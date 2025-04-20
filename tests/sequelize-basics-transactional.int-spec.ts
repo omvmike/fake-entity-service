@@ -351,4 +351,39 @@ describe('Test SequelizeFakeEntityService with transactions', () => {
       await newTransaction.rollback();
     }
   });
+
+  it('should automatically rollback transaction when create() throws an error', async () => {
+
+    const user = await fakeUserService.create({}, transaction);
+
+    // Verify the user exists within the transaction
+    const userBeforeError = await fakeUserService.repository.findOne({
+      where: { id: user.id },
+      transaction
+    });
+    expect(userBeforeError).toBeDefined();
+
+    // Attempt to create a post with invalid data that should cause an error
+    // We'll use a non-existent user ID to trigger a foreign key constraint error
+    const nonExistentUserId = 0;
+
+    let errorThrown = false;
+    try {
+      // This should fail due to foreign key constraint
+      await fakePostService.create({ userId: nonExistentUserId }, transaction);
+    } catch (error) {
+      errorThrown = true;
+
+      expect((transaction as any).finished).toBe('rollback');
+
+      // Verify the user no longer exists after rollback
+      const userAfterRollback = await fakeUserService.repository.findOne({
+        where: { id: user.id }
+      });
+      expect(userAfterRollback).toBeNull();
+    }
+
+    // Verify that an error was thrown
+    expect(errorThrown).toBe(true);
+  });
 });

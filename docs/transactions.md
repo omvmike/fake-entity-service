@@ -93,6 +93,43 @@ try {
 }
 ```
 
+It also allows yo to follow transactional flow into tests
+```typescript
+describe('Test SequelizeFakeEntityService with transactions', () => {
+  let transaction: Transaction;
+
+  beforeEach(async () => {
+    transaction = await sequelize.transaction();
+  });
+
+  afterEach(async () => {
+    await transaction.rollback();
+  });
+
+  it('should create user within transaction', async () => {
+    const user = await fakeUserService.create({}, transaction);
+    expect(user).toBeDefined();
+    expect(user.id).toBeDefined();
+    expect(user.email).toBeDefined();
+    expect(user.firstName).toBeDefined();
+    expect(user.lastName).toBeDefined();
+  });
+...  
+```
+See more examples in [sequelize-basics-transactional.int-spec.ts](../tests/sequelize-basics-transactional.int-spec.ts)folder of the repository.
+
+### Automatic Error Handling
+
+The Sequelize implementation includes built-in error handling through a `withTransaction` helper method
+
+This method ensures that:
+
+1. If a transaction is provided, it's used for all operations
+2. If an error occurs during any operation, the transaction is automatically rolled back (if not already committed)
+3. If no transaction is provided, operations proceed without transaction management
+
+All public methods (`create`, `createMany`, `delete`, `getEntityAt`) use this helper internally, making your tests more robust and less prone to data inconsistencies.
+
 ## Testing with Transactions
 
 For integration tests, it's recommended to use transactions to ensure test isolation:

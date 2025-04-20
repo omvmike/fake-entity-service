@@ -51,7 +51,7 @@ import { TypeOrmFakeEntityService } from 'fake-entity-service';
 
 ### Transaction Support
 
-The library provides transaction support for both TypeORM and Sequelize:
+The library provides transaction support for both TypeORM and Sequelize with automatic error handling and transaction rollback:
 
 ```typescript
 // Using with an existing transaction
@@ -68,6 +68,35 @@ await dataSource.transaction(async (transactionEntityManager) => {
   );
 });
 ```
+
+#### Automatic Error Handling
+
+Both TypeORM and Sequelize implementations include built-in error handling:
+
+```typescript
+// Manual transaction management with automatic rollback on error
+const transaction = await sequelize.transaction();
+try {
+  const user = await fakeUserService.create(
+    { firstName: 'John' },
+    transaction
+  );
+  
+  // If this operation fails, the transaction will be automatically rolled back
+  const posts = await fakePostService.createMany(
+    3, 
+    { userId: user.id },
+    transaction
+  );
+  
+  await transaction.commit();
+} catch (error) {
+  // The service will handle rollback automatically if needed
+  throw error;
+}
+```
+
+The services use a `withTransaction` helper method internally that ensures proper error handling and transaction management, making your tests more robust and less prone to data inconsistencies.
 
 For more details, see the [Transactions documentation](docs/transactions.md).
 
@@ -654,34 +683,3 @@ export class FakePostService extends SequelizeFakeEntityService<Post> {
     }
 }
 ```
-
-- The library support database transactions. You can pass a transaction to the `create` and `createMany` methods.
-```typescript
-const transaction = await sequelize.transaction();
-const user = await fakeUserService.create({firstName: 'John'}, transaction);
-await transaction.commit();
-```
-It also allows yo to follow transactional flow into tests
-```typescript
-describe('Test SequelizeFakeEntityService with transactions', () => {
-  let transaction: Transaction;
-
-  beforeEach(async () => {
-    transaction = await sequelize.transaction();
-  });
-
-  afterEach(async () => {
-    await transaction.rollback();
-  });
-
-  it('should create user within transaction', async () => {
-    const user = await fakeUserService.create({}, transaction);
-    expect(user).toBeDefined();
-    expect(user.id).toBeDefined();
-    expect(user.email).toBeDefined();
-    expect(user.firstName).toBeDefined();
-    expect(user.lastName).toBeDefined();
-  });
-...  
-```
-See more examples in [sequelize-basics-transactional.int-spec.ts](tests/sequelize-basics-transactional.int-spec.ts)folder of the repository.
