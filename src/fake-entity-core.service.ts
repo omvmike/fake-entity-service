@@ -160,21 +160,39 @@ export abstract class FakeEntityCoreService<TEntity> {
     return this;
   }
 
-  //* Delete all entities created by this service
-  public async cleanup(): Promise<number> {
+  /**
+   * Delete all entities created by this service
+   * 
+   * @param transaction - Optional transaction to use
+   * @returns Number of deleted entities
+   * 
+   * @example
+   * // Cleanup without transaction
+   * await fakeUserService.cleanup();
+   * 
+   * @example
+   * // Cleanup with transaction
+   * await dataSource.transaction(async (transactionEntityManager) => {
+   *   await fakeUserService.cleanup(transactionEntityManager);
+   * });
+   */
+  public async cleanup(transaction?: any): Promise<number> {
     if(!this.entityIds.length) {
       return 0;
     }
-    return this.delete(this.entityIds);
+    return this.delete(this.entityIds, transaction);
   }
 
-  public abstract delete(ids: any[]): Promise<number>;
+  public abstract delete(ids: any[], transaction?: any): Promise<number>;
 
-  public abstract create(customFields?: Partial<TEntity>,
+  public abstract create(
+    customFields?: Partial<TEntity>,
+    transaction?: any,
   ): Promise<TEntity>;
 
   public abstract createMany(
     count: number,
     customFields?: Partial<TEntity>,
+    transaction?: any,
   ): Promise<TEntity[]>;
 }

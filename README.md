@@ -4,10 +4,10 @@
 <a href="https://www.npmjs.com/package/fake-entity-service" target="_blank"><img src="https://img.shields.io/npm/l/fake-entity-service" alt="Package License" /></a>
 
 This is a fake entity service that allows you to prepare fake data for your tests.
-The aim is simplify database data generation for integration and end-to-end tests.
+The aim is to simplify database data generation for integration and end-to-end tests.
 
 And the main goal is to make it ORM agnostic.
-At the moment the library supports Sequelize ORM and TypeORM.
+At the moment the library supports Sequelize ORM and TypeORM with full transaction support.
 
 Target framework is [NestJs](https://nestjs.com/) but the code is framework agnostic 
 so you can use it with any other framework or even without any framework.
@@ -48,6 +48,28 @@ or
 ```typescript
 import { TypeOrmFakeEntityService } from 'fake-entity-service';
 ```
+
+### Transaction Support
+
+The library provides transaction support for both TypeORM and Sequelize:
+
+```typescript
+// Using with an existing transaction
+await dataSource.transaction(async (transactionEntityManager) => {
+  const user = await fakeUserService.create(
+    { firstName: 'John' },
+    transactionEntityManager
+  );
+  
+  const posts = await fakePostService.createMany(
+    3,
+    { userId: user.id },
+    transactionEntityManager
+  );
+});
+```
+
+For more details, see the [Transactions documentation](docs/transactions.md).
 
 
 ### How to create a new fake entity service
