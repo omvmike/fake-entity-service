@@ -67,7 +67,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
       try {
         return await callback(transaction);
       } catch (error) {
-        if ((transaction as any).finished !== 'commit') {
+        if ((transaction as any).finished !== 'commit' && (transaction as any).finished !== 'rollback') {
           await transaction.rollback();
         }
         throw error;
