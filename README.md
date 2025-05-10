@@ -31,22 +31,44 @@ const posts = await fakePostService
 ```
 This code creates 5 posts with messages: one, two, three and attaches them to the user with customer role.
 
-### Installation
+## Installation
 
-```shell
-npm i --save-dev fake-entity-service
+Install the package and your chosen ORM as a peer dependency:
+
+For Sequelize:
+```sh
+npm install fake-entity-service sequelize
+```
+
+For TypeORM:
+```sh
+npm install fake-entity-service typeorm
 ```
 
 ## Usage
 
+### Sequelize
+Import from the subpath:
+```ts
+import { SequelizeFakeEntityService, getSequelizeInstance } from 'fake-entity-service/sequelize';
+```
+
+### TypeORM
+Import from the subpath:
+```ts
+import { TypeormFakeEntityService, getTypeOrmDataSource } from 'fake-entity-service/typeorm';
+```
+
+> **Note:** Only the ORM you use needs to be installed. The package will not require the other ORM unless you import its service.
+
 Target ORMs are Sequelize and TypeORM. So you need to import one of the libraries:
 
 ```typescript
-import { SequelizeFakeEntityService } from 'fake-entity-service';
+import { SequelizeFakeEntityService } from 'fake-entity-service/sequelize';
 ```
 or 
 ```typescript
-import { TypeOrmFakeEntityService } from 'fake-entity-service';
+import { TypeOrmFakeEntityService } from 'fake-entity-service/typeorm';
 ```
 
 ### Transaction Support
@@ -118,7 +140,7 @@ Create a new file `fake-user.service.ts` with the content below.
 To make it with NestJS, you need to inject the model repository into the constructor:
 ```typescript
 import {faker} from '@faker-js/faker';
-import {SequelizeFakeEntityService} from "fake-entity-service";
+import {SequelizeFakeEntityService} from "fake-entity-service/sequelize";
 import {InjectModel} from "@nestjs/sequelize";
 import {User} from "../../src/entities";
 
