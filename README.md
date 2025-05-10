@@ -3,33 +3,23 @@
 <a href="https://www.npmjs.com/package/fake-entity-service" target="_blank"><img src="https://img.shields.io/npm/v/fake-entity-service" alt="NPM Version" /></a>
 <a href="https://www.npmjs.com/package/fake-entity-service" target="_blank"><img src="https://img.shields.io/npm/l/fake-entity-service" alt="Package License" /></a>
 
-This is a fake entity service that allows you to prepare fake data for your tests.
-The aim is to simplify database data generation for integration and end-to-end tests.
+`fake-entity-service` is a TypeScript library designed to simplify database data generation for testing purposes in Node.js applications. It provides a clean, flexible API to create test data for your database entities with support for relationships, states, and sequences.
 
-And the main goal is to make it ORM agnostic.
-At the moment the library supports Sequelize ORM and TypeORM with full transaction support.
-
-Target framework is [NestJs](https://nestjs.com/) but the code is framework agnostic 
-so you can use it with any other framework or even without any framework.
-You can find examples of usage with and without NestJS below.
-
-The library was tested with [Jest](https://jestjs.io/) but it should work with any other test runner.
+The library is ORM-agnostic and currently supports Sequelize and TypeORM with full transaction support. While designed with [NestJS](https://nestjs.com/) in mind, it can be used with any framework or even without one.
 
 This library is inspired by Laravel's [factory](https://laravel.com/docs/8.x/database-testing#introduction) so you can find some similarities.
 But since it's a TypeScript library, it has quite different syntax.
 
-It allows you to describe database entities and their relations in explicit way:
-```typescript
-const posts = await fakePostService
-    .withParentUser(fakeUserService.asRole(RoleIds.CUSTOMER))
-    .addStates([
-        {message: 'one'},
-        {message: 'two'},
-        {message: 'three'},
-    ])
-    .createMany(5);
-```
-This code creates 5 posts with messages: one, two, three and attaches them to the user with customer role.
+## Key Features
+
+- 🔄 **ORM Agnostic** - Works with both Sequelize and TypeORM
+- 🧩 **Relationship Support** - Easily define parent-child and nested relationships
+- 🧪 **Testing-Focused** - Designed specifically for integration and e2e tests
+- 🧹 **Automatic Cleanup** - Tracks and cleans up created entities
+- ⚙️ **Transaction Support** - Full transaction support with automatic error handling
+- 🔄 **State Management** - Define entity states and sequences
+- 🔧 **Callbacks** - Pre and post-creation hooks for fine-grained control
+
 
 ## Installation
 

@@ -204,4 +204,134 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     await fakeCommentService.cleanup();
     await fakePostService.cleanup();
   });
+
+  it('should fail to create user with missing required fields', async () => {
+    // Missing user
+    await expect(fakePostService.create({ message: 'Missing user' })).rejects.toThrow();
+  });
+
+  it('should fail to create user with duplicate email', async () => {
+    const email = `duplicate${Date.now()}@example.com`;
+    const user1 = await fakeUserService.create({ email, firstName: 'Dupe', lastName: 'User', password: 'pwd', roleId: RoleIds.CUSTOMER });
+    await expect(fakeUserService.create({ email, firstName: 'Dupe2', lastName: 'User2', password: 'pwd', roleId: RoleIds.CUSTOMER })).rejects.toThrow();
+  });
+
+  it('should fail to create post with non-existent userId', async () => {
+    // Assuming 999999 does not exist
+    await expect(fakePostService.create({ userId: 999999, message: 'Invalid user' })).rejects.toThrow();
+  });
+
+  it('should return empty array when createMany(0) is called', async () => {
+    const users = await fakeUserService.createMany(0);
+    expect(users).toEqual([]);
+  });
+
+  it('should handle createMany with large N', async () => {
+    // Use a reasonable large number to avoid test slowness
+    const N = 100;
+    const users = await fakeUserService.createMany(N);
+    expect(users.length).toBe(N);
+    users.forEach(user => {
+      expect(user).toBeDefined();
+      expect(user.id).toBeDefined();
+    });
+    await fakeUserService.cleanup();
+  });
+
+
+  it('should handle createMany with duplicate states', async () => {
+    const email = 'duplicatestates@example.com';
+    await expect(
+      fakeUserService.addStates([
+        { email, firstName: 'A', lastName: 'B', password: 'pwd', roleId: RoleIds.CUSTOMER },
+        { email, firstName: 'C', lastName: 'D', password: 'pwd', roleId: RoleIds.CUSTOMER },
+      ]).createMany(2)
+    ).rejects.toThrow();
+  });
+
+  it('should create user with boundary and special values', async () => {
+    // Max length strings (assuming 255 reasonable for test)
+    const maxStr = 'a'.repeat(255);
+    const user = await fakeUserService.create({
+      email: `maxlen${Date.now()}@example.com`,
+      firstName: maxStr,
+      lastName: maxStr,
+      password: maxStr,
+      roleId: RoleIds.CUSTOMER,
+    });
+    expect(user).toBeDefined();
+    expect(user.firstName.length).toBe(255);
+    expect(user.lastName.length).toBe(255);
+    // Empty strings
+    const user2 = await fakeUserService.create({
+      email: `empty${Date.now()}@example.com`,
+      firstName: '',
+      lastName: '',
+      password: 'x',
+      roleId: RoleIds.CUSTOMER,
+    });
+    expect(user2).toBeDefined();
+    expect(user2.firstName).toBe('');
+    expect(user2.lastName).toBe('');
+    // Special characters
+    const special = '!@#$%^&*()_+-=~`[]{}|;:\",.<>/?';
+    const user3 = await fakeUserService.create({
+      email: `special${Date.now()}@example.com`,
+      firstName: special,
+      lastName: special,
+      password: 'x',
+      roleId: RoleIds.CUSTOMER,
+    });
+    expect(user3).toBeDefined();
+    expect(user3.firstName).toBe(special);
+    expect(user3.lastName).toBe(special);
+  });
+
+  it('should create user with SQL-like input safely', async () => {
+    const sql = "test'; DROP TABLE users; --";
+    const user = await fakeUserService.create({
+      email: `sql${Date.now()}@example.com`,
+      firstName: sql,
+      lastName: sql,
+      password: 'x',
+      roleId: RoleIds.CUSTOMER,
+    });
+    expect(user).toBeDefined();
+    expect(user.firstName).toBe(sql);
+    expect(user.lastName).toBe(sql);
+  });
+
+  it('should mutate properties in afterMakingCallback and persist changes', async () => {
+    const newName = 'MutatedName';
+    const users = await fakeUserService
+      .addStates([{ firstName: 'WillChange', lastName: 'Before', email: `cb${Date.now()}@example.com`, password: 'x', roleId: RoleIds.CUSTOMER }])
+      .afterMakingCallback((user, index) => {
+        user.firstName = newName;
+        return user;
+      })
+      .createMany(1);
+    expect(users[0].firstName).toBe(newName);
+  });
+
+  it('should provide correct index/order in afterMakingCallback', async () => {
+    const emails = [
+      `cbidx1${Date.now()}@example.com`,
+      `cbidx2${Date.now()}@example.com`,
+      `cbidx3${Date.now()}@example.com`
+    ];
+    const users = await fakeUserService
+      .addStates([
+        { email: emails[0], firstName: 'A', lastName: 'A', password: 'x', roleId: RoleIds.CUSTOMER },
+        { email: emails[1], firstName: 'B', lastName: 'B', password: 'x', roleId: RoleIds.CUSTOMER },
+        { email: emails[2], firstName: 'C', lastName: 'C', password: 'x', roleId: RoleIds.CUSTOMER },
+      ])
+      .afterMakingCallback((user, index) => {
+        user.lastName = `Order${index}`;
+        return user;
+      })
+      .createMany(3);
+    expect(users[0].lastName).toBe('Order0');
+    expect(users[1].lastName).toBe('Order1');
+    expect(users[2].lastName).toBe('Order2');
+  });
 });
