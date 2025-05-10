@@ -14,11 +14,12 @@ export class FakeUserService extends TypeormFakeEntityService<User> {
 
   setFakeFields(): Partial<User> {
     const seed = String(Math.random() * 100000);
-    const name = faker.name.firstName() + seed
+    const firstName = faker.person.firstName() + seed;
+    const lastName = faker.person.lastName();
     return  {
-      email: faker.internet.email(name),
-      firstName: faker.name.firstName(),
-      lastName: faker.name.lastName(),
+      email: faker.internet.email({ firstName, lastName }),
+      firstName,
+      lastName,
       password: 'password',
       roleId: 1,
     };

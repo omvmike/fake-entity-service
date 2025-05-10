@@ -17,8 +17,8 @@ export class FakeCommentService extends TypeormFakeEntityService<Comment> {
 
   protected setFakeFields(): Partial<Comment> {
     return {
-      postId: faker.datatype.number(),
-      userId: faker.datatype.number(),
+      postId: faker.number.int(),
+      userId: faker.number.int(),
       message: faker.lorem.sentence(),
       createdAt: faker.date.recent(),
     };

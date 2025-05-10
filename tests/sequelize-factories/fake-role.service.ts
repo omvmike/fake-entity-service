@@ -14,7 +14,7 @@ export class FakeRoleService extends SequelizeFakeEntityService<Role> {
 
   setFakeFields(): Partial<Role> {
     const seed = String(Math.random() * 100000);
-    const name = faker.name.firstName() + seed
+    const name = faker.person.firstName() + seed
     return  {
       name: faker.commerce.productName()
     };
