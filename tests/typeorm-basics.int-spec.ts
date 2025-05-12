@@ -334,4 +334,25 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     expect(users[1].lastName).toBe('Order1');
     expect(users[2].lastName).toBe('Order2');
   });
+
+  it('should clone service and produce empty state', async () => {
+    // Arrange: create a user in the original service
+    const user = await fakeUserService.create();
+    expect(user).toBeDefined();
+    expect(fakeUserService.entityIds.length).toBe(1);
+
+    // Act: clone the service
+    const clonedService = fakeUserService.clone();
+
+    // Assert: cloned service should have same repository, but empty state
+    expect(clonedService).not.toBe(fakeUserService);
+    expect(clonedService.repository).toBe(fakeUserService.repository);
+    expect(clonedService.entityIds.length).toBe(0);
+
+    // Creating in the clone should not affect the original
+    const user2 = await clonedService.createMany(3);
+    expect(user2).toBeDefined();
+    expect(clonedService.entityIds.length).toBe(3);
+    expect(fakeUserService.entityIds.length).toBe(1);
+  });
 });

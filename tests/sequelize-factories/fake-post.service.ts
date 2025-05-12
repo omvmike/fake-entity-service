@@ -4,6 +4,7 @@ import { FakeUserService } from './fake-user.service';
 import {faker} from '@faker-js/faker';
 import {User} from "../sequelize-models/user.entity";
 import {FakeCommentService} from "./fake-comment.service";
+import {Comment} from "../sequelize-models/comment.entity";
 
 export class FakePostService extends SequelizeFakeEntityService<Post> {
   constructor(

@@ -9,6 +9,7 @@ import {FakePostService} from "./sequelize-factories/fake-post.service";
 import {Post} from "./sequelize-models/post.entity";
 import {Comment} from "./sequelize-models/comment.entity";
 import {FakeCommentService} from "./sequelize-factories/fake-comment.service";
+import {col} from "sequelize";
 
 const sequelize = new Sequelize({
   host: 'localhost',
@@ -383,5 +384,86 @@ describe('Test SequelizeFakeEntityService can create and cleanup DB entities', (
     expect(users[0].lastName).toBe('Order0');
     expect(users[1].lastName).toBe('Order1');
     expect(users[2].lastName).toBe('Order2');
+  });
+
+  it('should clone service and produce empty state', async () => {
+    // Arrange: create a user in the original service
+    const user = await fakeUserService.create();
+    expect(user).toBeDefined();
+    expect(fakeUserService.entityIds.length).toBe(1);
+
+    // Act: clone the service
+    const clonedService = fakeUserService.clone();
+
+    // Assert: cloned service should have same repository, but empty state
+    expect(clonedService).not.toBe(fakeUserService);
+    expect(clonedService.repository).toBe(fakeUserService.repository);
+    expect(clonedService.entityIds.length).toBe(0);
+
+    // Creating in the clone should not affect the original
+    const user2 = await clonedService.createMany(3);
+    expect(user2).toBeDefined();
+    expect(clonedService.entityIds.length).toBe(3);
+    expect(fakeUserService.entityIds.length).toBe(1);
+  });
+
+  it('should create two users, first with post and 1 comment, second with post and 2 comments', async () => {
+    const commenters = await fakeUserService.asRole(RoleIds.CUSTOMER).createMany(3);
+
+    const clonedFakeCommentService = fakeCommentService
+      .clone()
+      .addStates(commenters.map((c) => ({userId: c.id})));
+
+    const clonedFakePostService = fakePostService.clone();
+    // Create two users
+    const users = await fakeUserService
+      .withNested(
+        fakePostService
+          .withComments(fakeCommentService, 1, {message: 'First comment', userId: commenters[0].id}),
+        {
+          parent: 'id',
+          nested: 'userId',
+        }, 1)
+      .withNested(
+        clonedFakePostService
+          .withComments(clonedFakeCommentService, 2, {message: 'Double comment'}),
+        {
+          parent: 'id',
+          nested: 'userId',
+        }, 1)
+      .createMany(2);
+    expect(users.length).toBe(2);
+
+    const usersWithPosts = await fakeUserService.repository.findAll({
+      where: { id: users.map(user => user.id) },
+      include: [
+        {
+          model: Post,
+          include: [
+            {
+              model: Comment,
+            },
+          ],
+        },
+      ],
+    })
+
+    // check that user has two posts
+    // one of them has 1 comment and the other has 2 comments
+    expect(usersWithPosts.length).toBe(2);
+    expect(usersWithPosts[0].posts.length).toBe(2);
+    expect(usersWithPosts[0].posts[0].comments.length).toBe(1);
+    expect(usersWithPosts[0].posts[0].comments[0].message).toBe('First comment');
+    expect(usersWithPosts[0].posts[1].comments.length).toBe(2);
+
+    expect(usersWithPosts[1].posts.length).toBe(2);
+    expect(usersWithPosts[1].posts[0].comments.length).toBe(1);
+    expect(usersWithPosts[1].posts[1].comments.length).toBe(2);
+
+
+    await fakeCommentService.cleanup();
+    await clonedFakeCommentService.cleanup();
+    await fakePostService.cleanup();
+    await clonedFakePostService.cleanup();
   });
 });

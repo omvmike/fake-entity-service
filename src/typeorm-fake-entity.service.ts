@@ -25,7 +25,7 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
   constructor(protected repository: Repository<TEntity>) {
     super();
   }
-  
+
   /**
    * Helper method to handle transactions
    * This method ensures proper error handling when using transactions
@@ -272,7 +272,11 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
       const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
       const res = await repo.delete(ids);
       return res.affected || 0;
-    }, transaction);
+    }, transaction).then((deletionResult) => {
+      // Remove deleted entity IDs from the entityIds array
+      this.entityIds = [];
+      return deletionResult;
+    });
   }
 
   public withParent(fakeParentService: TypeormFakeEntityService<any>, relationFields: SingleKeyRelation | MultipleKeyRelations, each = false, customFields?: any): TypeormFakeEntityService<TEntity> {

@@ -195,4 +195,20 @@ export abstract class FakeEntityCoreService<TEntity> {
     customFields?: Partial<TEntity>,
     transaction?: any,
   ): Promise<TEntity[]>;
+
+  /**
+   * Creates a new instance of this service with the same repository and empty state.
+   *
+   * WARNING: This implementation assumes the subclass has a constructor(repository: any)
+   * and a `repository` property. If your subclass does not follow this convention,
+   * you must override this method.
+   *
+   * @returns {this} a new instance with the same repository and empty state
+   */
+  public clone(): this {
+    // @ts-ignore: dynamic constructor call
+    const Cls = this.constructor as { new (...args: any[]): this };
+    // @ts-ignore: repository must be defined on subclasses
+    return new Cls(this.repository);
+  }
 }

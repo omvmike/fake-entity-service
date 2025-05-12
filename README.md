@@ -668,6 +668,33 @@ const posts = await fakePostService
 ```
 
 
+## Cloning Services for Isolated Test Data Generation
+
+### The `clone()` Method
+
+The `clone()` method allows you to create a new instance of your fake entity service with the same repository, but with empty state. This is especially useful when you want to:
+
+- **Isolate state**: Each clone tracks its own created entities and configuration, so changes in one clone do not affect others.
+- **Run parallel or branched test scenarios**: You can configure each clone independently (e.g., different states, nested entities, or field sequences), enabling complex setups in a single test or across multiple tests.
+- **Reuse and extend configuration**: Start from a base service and branch off with different behaviors or data generation strategies without cross-contamination.
+- **Clean up test data precisely**: Since each clone tracks its own entities, you can clean up only what was created by a particular clone.
+
+#### Example Usage
+
+```typescript
+const baseService = new FakeUserService(UserRepository);
+const cloneA = baseService.clone().addStates([{ firstName: 'Alice' }]);
+const cloneB = baseService.clone().addStates([{ firstName: 'Bob' }]);
+
+await cloneA.create(); // Creates a user 'Alice' in cloneA
+await cloneB.create(); // Creates a user 'Bob' in cloneB
+
+// Entities and configuration in cloneA and cloneB are isolated from each other and from baseService.
+```
+
+> **Note:** The `clone()` method assumes your service constructor accepts a repository as the first argument and that a `repository` property exists. If your subclass uses a different signature, override `clone()` accordingly.
+
+
 ## Sequelize specific features
 - Use Sequelize's primary keys detection. The library uses Sequelize's model `primaryKeyAttributes` property to detect primary keys.
 > If you need to override it, you can pass `idFieldName` property to your service class:

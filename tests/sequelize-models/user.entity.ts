@@ -3,11 +3,12 @@ import {
   BelongsTo,
   Column,
   DataType,
-  ForeignKey,
+  ForeignKey, HasMany,
   Model,
   Table,
 } from 'sequelize-typescript';
 import { Role } from './role.entity';
+import {Post} from "./post.entity";
 
 export class IUserCreateAttributes {
   email: string;
@@ -76,6 +77,9 @@ export class User extends Model<
 
   @BelongsTo(() => Role)
   readonly role: Role;
+
+  @HasMany(() => Post)
+  readonly posts: Post[];
 }
 
 User.prototype.toJSON = function () {

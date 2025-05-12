@@ -40,7 +40,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
   ) {
     super();
   }
-  
+
   /**
    * Helper method to handle transactions
    * This method ensures proper error handling when using transactions
@@ -337,7 +337,11 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
         where,
         transaction: tx,
       });
-    }, transaction);
+    }, transaction).then((deletionResult) => {
+      // Remove deleted entity IDs from the entityIds array
+      this.entityIds = [];
+      return deletionResult;
+    })
   }
 
   /**
