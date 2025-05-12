@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.2] - 2025-05-12
+### Added
+- Introduced the `clone()` method to core and all services, enabling creation of isolated service instances with shared repository and empty state.
+- Documented `clone()` usage and benefits in README.
+- Added and improved integration tests for `clone()` and advanced service chaining scenarios.
+
+### Fixed
+- Minor documentation and test improvements for clarity and maintainability.
+
 ## [0.9.1] - 2025-05-10
 ### Added
 - Updated dependencies and refactored faker usage in services.
