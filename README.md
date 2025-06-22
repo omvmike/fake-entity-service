@@ -13,6 +13,8 @@ But since it's a TypeScript library, it has quite different syntax.
 ## Key Features
 
 - 🔄 **ORM Agnostic** - Works with both Sequelize and TypeORM
+- 🔑 **Composite Primary Key Support** - Full support for single and multi-column primary keys
+- 🔍 **Automatic Primary Key Detection** - Automatically detects primary keys from entity metadata
 - 🧩 **Relationship Support** - Easily define parent-child and nested relationships
 - 🧪 **Testing-Focused** - Designed specifically for integration and e2e tests
 - 🧹 **Automatic Cleanup** - Tracks and cleans up created entities
@@ -607,29 +609,60 @@ this code will delete all users created by the `fakeUserService` service.
 
 #### Primary keys
 
-As you can see in the examples above, we need to describe primary key column name for the entity model
-to track created entities and to delete them later.
+The library automatically detects primary keys from your entity metadata for both TypeORM and Sequelize.
 
-Primary key description is ORM specific.
+**Automatic Primary Key Detection:**
+- **TypeORM**: Reads `@PrimaryColumn` and `@PrimaryGeneratedColumn` decorators from entity metadata
+- **Sequelize**: Uses the model's `primaryKeyAttributes` property
+- **Composite Keys**: Full support for multi-column primary keys in both ORMs
 
-For Sequelize we support automatic detection of primary keys both for single column and multi-column primary keys.
-see [Sequelize specific features](#sequelize-specific-features) section below.
-
-Unfortunately, automatic detection of primary keys is not applied for TypeORM version of the library.
-Thus, we use `id` field as a default primary key column for TypeORM.
-But you can override it by passing `idFieldName` property to your service class:
+The library tracks created entities using their primary key values and provides cleanup functionality:
 
 ```typescript
-import {TypeormFakeEntityService} from "./typeorm-fake-entity.service";
+// For single primary key entities
+const users = await fakeUserService.createMany(5);
+await fakeUserService.cleanup(); // Deletes all created users
 
-export class FakeUserService extends TypeormFakeEntityService<User> {
-    public idFieldName = 'uuid';
+// For composite primary key entities  
+const followers = await fakeFollowerService.createMany(3, {
+  userId: 1,
+  followerId: 2
+});
+await fakeFollowerService.cleanup(); // Handles composite key cleanup
+```
 
-    // ...
-    // constructor and other methods
+**Working with Composite Primary Keys:**
+
+```typescript
+// Find entity by composite key
+const follower = await fakeFollowerService.findByCompositeKey({
+  userId: 1,
+  followerId: 2
+});
+
+// Check if entity has composite primary key
+if (fakeFollowerService.hasCompositeId()) {
+  console.log('Entity uses composite primary key');
+  console.log('Key fields:', fakeFollowerService.getIdFieldNames());
 }
 ```
-Multi-column primary keys are not supported for `TypeormFakeEntityService` yet. 
+
+**Manual Override (if needed):**
+While automatic detection works for most cases, you can override the primary key fields:
+
+```typescript
+// TypeORM
+export class FakeUserService extends TypeormFakeEntityService<User> {
+    public idFieldNames = ['uuid']; // Override detected primary keys
+    // ...
+}
+
+// Sequelize  
+export class FakeUserService extends SequelizeFakeEntityService<User> {
+    public idFieldNames = ['customId']; // Override detected primary keys
+    // ...
+}
+``` 
 
 ### Callbacks
 
@@ -695,19 +728,25 @@ await cloneB.create(); // Creates a user 'Bob' in cloneB
 > **Note:** The `clone()` method assumes your service constructor accepts a repository as the first argument and that a `repository` property exists. If your subclass uses a different signature, override `clone()` accordingly.
 
 
-## Sequelize specific features
-- Use Sequelize's primary keys detection. The library uses Sequelize's model `primaryKeyAttributes` property to detect primary keys.
-> If you need to override it, you can pass `idFieldName` property to your service class:
+## ORM-Specific Features
 
-- The library can work with multi-column primary keys. It also Sequelize's model `primaryKeyAttributes` property to detect them.
+### Sequelize Features
+- **Automatic Primary Key Detection**: Uses Sequelize's model `primaryKeyAttributes` property to detect both single and composite primary keys
+- **Composite Primary Key Support**: Full CRUD operations support for multi-column primary keys  
+- **Sequelize Relations**: Integration with Sequelize's built-in associations for nested entity creation
 
-- The library can work with Sequelize's relations. If you described relations in your model, the library will use them to create nested entities.
-> For example, if you have `User` and `Notification` models and `User.hasMany(Notification)` relation, you can describe `withNotifications` method from previous example like below:
+### TypeORM Features  
+- **Automatic Primary Key Detection**: Reads primary key metadata from `@PrimaryColumn` and `@PrimaryGeneratedColumn` decorators
+- **Composite Primary Key Support**: Complete support for multi-column primary keys with automatic detection
+- **Enhanced Error Handling**: Detailed validation messages for primary key operations
+
+### Using Sequelize Relations
+If you have described relations in your Sequelize model, the library can use them to create nested entities:
+> For example, if you have `User` and `Notification` models and `User.hasMany(Notification)` relation, you can describe `withNotifications` method like below:
 ```typescript
-export class FakePostService extends SequelizeFakeEntityService<Post> {
+export class FakeUserService extends SequelizeFakeEntityService<User> {
     // constructor and other methods
     // ... 
-
 
     withNotifications(fakeNotificationService: FakeNotificationService, count: number, customFields?: Partial<Notification>): FakeUserService {
         this.nestedEntities.push({
