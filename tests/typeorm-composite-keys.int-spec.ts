@@ -378,16 +378,15 @@ describe('TypeORM Composite Key Operations', () => {
 
       const startTime = Date.now();
       
-      // Create 50 follower relationships
-      const followers = await Promise.all(
-        followerUsers.map(user => 
-          fakeFollowerService.create({
-            leaderId: leader.id,
-            followerId: user.id,
-            createdAt: new Date()
-          })
-        )
-      );
+      // Create 50 follower relationships using addStates pattern
+      const followers = await fakeFollowerService
+        .addStates(followerUsers.map(user => ({
+          followerId: user.id,
+        })))
+        .createMany(50, {
+          leaderId: leader.id,
+          createdAt: new Date()
+        });
       
       const creationTime = Date.now() - startTime;
       expect(creationTime).toBeLessThan(5000); // Should complete within 5 seconds
@@ -419,16 +418,15 @@ describe('TypeORM Composite Key Operations', () => {
         roleId: createdRoleIds.customer
       });
 
-      // Create test data
-      const followers = await Promise.all(
-        followerUsers.map(user => 
-          fakeFollowerService.create({
-            leaderId: leader.id,
-            followerId: user.id,
-            createdAt: new Date()
-          })
-        )
-      );
+      // Create test data using addStates pattern
+      const followers = await fakeFollowerService
+        .addStates(followerUsers.map(user => ({
+          followerId: user.id,
+        })))
+        .createMany(10, {
+          leaderId: leader.id,
+          createdAt: new Date()
+        });
       
       // Extract composite IDs for deletion
       const compositeIds = followers.map(f => fakeFollowerService.getId(f));
