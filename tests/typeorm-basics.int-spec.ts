@@ -48,6 +48,23 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     expect(user.lastName).toBeDefined();
   });
 
+  it('should automatically detect primary key for User entity', () => {
+    expect(fakeUserService.getIdFieldNames()).toEqual(['id']);
+    expect(fakeUserService.hasCompositeId()).toBe(false);
+    
+    const primaryColumns = fakeUserService.getPrimaryColumns();
+    expect(primaryColumns).toHaveLength(1);
+    expect(primaryColumns[0].propertyName).toBe('id');
+  });
+
+  it('should extract single primary key ID correctly', async () => {
+    const user = await fakeUserService.create();
+    const extractedId = fakeUserService.getId(user);
+    
+    expect(extractedId).toBe(user.id);
+    expect(typeof extractedId).toBe('number');
+  });
+
   it('should create N users', async () => {
     const users = await fakeUserService.createMany(3);
     expect(users).toBeDefined();
@@ -335,6 +352,74 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     expect(users[2].lastName).toBe('Order2');
   });
 
+  it('should delete entities using automatic primary key detection', async () => {
+    const users = await fakeUserService.createMany(3);
+    expect(users).toHaveLength(3);
+    
+    // Extract IDs using automatic detection
+    const userIds = users.map(user => fakeUserService.getId(user));
+    expect(userIds).toHaveLength(3);
+    userIds.forEach(id => {
+      expect(typeof id).toBe('number');
+      expect(id).toBeGreaterThan(0);
+    });
+    
+    // Delete using detected IDs
+    const deletedCount = await fakeUserService.delete(userIds);
+    expect(deletedCount).toBe(3);
+    
+    // Verify entities are deleted
+    for (const id of userIds) {
+      const found = await fakeUserService.repository.findOne({ where: { id } });
+      expect(found).toBeNull();
+    }
+  });
+
+  it('should handle mixed primary key scenarios across different entities', async () => {
+    // Test User entity (single primary key)
+    const user = await fakeUserService.create();
+    expect(fakeUserService.getIdFieldNames()).toEqual(['id']);
+    expect(fakeUserService.hasCompositeId()).toBe(false);
+    expect(fakeUserService.getId(user)).toBe(user.id);
+    
+    // Test Post entity (single primary key)
+    const post = await fakePostService.create({ userId: user.id, message: 'Test post' });
+    expect(fakePostService.getIdFieldNames()).toEqual(['id']);
+    expect(fakePostService.hasCompositeId()).toBe(false);
+    expect(fakePostService.getId(post)).toBe(post.id);
+    
+    // Test Comment entity (single primary key)
+    const comment = await fakeCommentService.create({ 
+      userId: user.id, 
+      postId: post.id, 
+      message: 'Test comment' 
+    });
+    expect(fakeCommentService.getIdFieldNames()).toEqual(['id']);
+    expect(fakeCommentService.hasCompositeId()).toBe(false);
+    expect(fakeCommentService.getId(comment)).toBe(comment.id);
+    
+    // Cleanup
+    await fakeCommentService.cleanup();
+    await fakePostService.cleanup();
+  });
+
+  it('should validate primary key detection consistency', async () => {
+    // Create multiple users and verify consistent ID extraction
+    const users = await fakeUserService.createMany(5);
+    
+    for (const user of users) {
+      const extractedId = fakeUserService.getId(user);
+      expect(extractedId).toBe(user.id);
+      expect(typeof extractedId).toBe('number');
+      expect(extractedId).toBeGreaterThan(0);
+    }
+    
+    // Verify all IDs are unique
+    const allIds = users.map(user => fakeUserService.getId(user));
+    const uniqueIds = [...new Set(allIds)];
+    expect(uniqueIds).toHaveLength(allIds.length);
+  });
+
   it('should clone service and produce empty state', async () => {
     // Arrange: create a user in the original service
     const user = await fakeUserService.create();
@@ -348,6 +433,10 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     expect(clonedService).not.toBe(fakeUserService);
     expect(clonedService.repository).toBe(fakeUserService.repository);
     expect(clonedService.entityIds.length).toBe(0);
+    
+    // Assert: cloned service should have same primary key detection
+    expect(clonedService.getIdFieldNames()).toEqual(fakeUserService.getIdFieldNames());
+    expect(clonedService.hasCompositeId()).toBe(fakeUserService.hasCompositeId());
 
     // Creating in the clone should not affect the original
     const user2 = await clonedService.createMany(3);
