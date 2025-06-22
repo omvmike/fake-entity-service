@@ -200,8 +200,8 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
     }
     const idFieldName = this.getIdFieldNames()[0];
     const idValue = e[idFieldName];
-    if (idValue === undefined) {
-      throw new Error(`Id field "${idFieldName}" is empty`)
+    if (idValue === undefined || idValue === null) {
+      throw new Error(`Primary key field "${idFieldName}" is empty or null in entity ${this.repository.modelName}`);
     }
     return e[this.getIdFieldNames()[0]];
   }
