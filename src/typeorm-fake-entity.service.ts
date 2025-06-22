@@ -104,7 +104,8 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     return this.withTransaction(async (tx) => {
       const where = this.buildCompositeKeyWhere(keyValues);
       const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
-      return repo.findOne({ where });
+      const result = await repo.findOne({ where });
+      return result || undefined; // Convert null to undefined
     }, transaction);
   }
 
@@ -375,7 +376,20 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
       }
     }, transaction).then((deletionResult) => {
       // Remove deleted entity IDs from the entityIds array
-      this.entityIds = [];
+      if (this.hasCompositeId()) {
+        // For composite keys, need deep comparison of objects
+        this.entityIds = this.entityIds.filter(entityId => {
+          return !ids.some(deletedId => {
+            // Check if all key fields match
+            return this.getIdFieldNames().every(field => 
+              entityId[field] === deletedId[field]
+            );
+          });
+        });
+      } else {
+        // For single keys, use simple includes
+        this.entityIds = this.entityIds.filter(id => !ids.includes(id));
+      }
       return deletionResult;
     });
   }
