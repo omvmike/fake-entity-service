@@ -201,7 +201,7 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
     const idFieldName = this.getIdFieldNames()[0];
     const idValue = e[idFieldName];
     if (idValue === undefined || idValue === null) {
-      throw new Error(`Primary key field "${idFieldName}" is empty or null in entity ${this.repository.modelName}`);
+      throw new Error(`Primary key field "${idFieldName}" is empty or null in entity ${this.repository.name}`);
     }
     return e[this.getIdFieldNames()[0]];
   }
@@ -394,5 +394,33 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
       relationFields
     });
     return this;
+  }
+
+  /**
+   * Build where conditions for composite primary keys
+   */
+  private buildCompositeKeyWhere(keyValues: Record<string, any>): any {
+    const where = {};
+    for (const [key, value] of Object.entries(keyValues)) {
+      if (!this.getIdFieldNames().includes(key)) {
+        throw new Error(`Invalid primary key field "${key}" for entity ${this.repository.name}`);
+      }
+      where[key] = value;
+    }
+    return where;
+  }
+
+  /**
+   * Find entity by composite primary key
+   */
+  public async findByCompositeKey(keyValues: Record<string, any>, transaction?: Transaction): Promise<TEntity | undefined> {
+    return this.withTransaction(async (tx) => {
+      const where = this.buildCompositeKeyWhere(keyValues);
+      const result = await this.repository.findOne({ 
+        where,
+        transaction: tx 
+      });
+      return result || undefined; // Convert null to undefined
+    }, transaction);
   }
 }

@@ -4,7 +4,7 @@ import {LeaderFollower} from "./sequelize-models/leader-follower.entity";
 
 // Mock repository for testing Sequelize primary key detection
 class MockSequelizeRepository {
-  constructor(public primaryKeyAttributes: string[], public modelName: string = 'TestModel') {}
+  constructor(public primaryKeyAttributes: string[], public name: string = 'TestModel') {}
   
   // Mock Sequelize methods
   create = jest.fn();
