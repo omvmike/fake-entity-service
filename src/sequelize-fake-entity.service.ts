@@ -337,11 +337,25 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
         where,
         transaction: tx,
       });
-    }, transaction).then((deletionResult) => {
+    }, transaction).then((affectedCount) => {
       // Remove deleted entity IDs from the entityIds array
-      this.entityIds = [];
-      return deletionResult;
-    })
+      if (this.hasCompositeId()) {
+        // For composite keys, need deep comparison of objects
+        this.entityIds = this.entityIds.filter(entityId => {
+          return !entityIds.some(deletedId => {
+            // Check if all key fields match
+            return this.getIdFieldNames().every(field => 
+              entityId[field] === deletedId[field]
+            );
+          });
+        });
+      } else {
+        // For single keys, use simple includes
+        this.entityIds = this.entityIds.filter(id => !entityIds.includes(id));
+      }
+      return affectedCount;
+    });
+
   }
 
   /**
