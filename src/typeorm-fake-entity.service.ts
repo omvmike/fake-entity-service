@@ -1,4 +1,4 @@
-import {DeepPartial, EntityManager, FindOneOptions, Repository} from "typeorm";
+import {DeepPartial, EntityManager, FindOneOptions, Repository, In, FindOptionsWhere} from "typeorm";
 import {FakeEntityCoreService, MultipleKeyRelations, SingleKeyRelation} from "./fake-entity-core.service";
 
 
@@ -6,7 +6,7 @@ import {FakeEntityCoreService, MultipleKeyRelations, SingleKeyRelation} from "./
 export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEntity>{
 
   public entityIds = [];
-  public idFieldName = 'id';
+  public idFieldNames: string[] = [];
 
   protected nestedEntities: {
     service: TypeormFakeEntityService<any>,
@@ -24,6 +24,88 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
 
   constructor(protected repository: Repository<TEntity>) {
     super();
+    this.detectPrimaryKeys();
+  }
+
+  /**
+   * Automatically detect primary keys from TypeORM entity metadata
+   */
+  private detectPrimaryKeys(): void {
+    if (this.idFieldNames.length === 0) {
+      const primaryColumns = this.repository.metadata.primaryColumns;
+      this.idFieldNames = primaryColumns.map(column => column.propertyName);
+      this.validatePrimaryKeys();
+    }
+  }
+
+  /**
+   * Validate that primary keys were detected properly
+   */
+  private validatePrimaryKeys(): void {
+    if (this.idFieldNames.length === 0) {
+      throw new Error(`No primary keys detected for entity ${this.repository.metadata.name}. Please ensure the entity has @PrimaryColumn or @PrimaryGeneratedColumn decorators.`);
+    }
+  }
+
+  /**
+   * Get primary key field names
+   */
+  public getIdFieldNames(): string[] {
+    return this.idFieldNames;
+  }
+
+  /**
+   * Check if entity has composite primary key
+   */
+  public hasCompositeId(): boolean {
+    return this.getIdFieldNames().length > 1;
+  }
+
+  /**
+   * Get TypeORM primary column metadata
+   */
+  public getPrimaryColumns() {
+    return this.repository.metadata.primaryColumns;
+  }
+
+  /**
+   * Extract primary key values from an entity object
+   */
+  protected pickKeysFromObject(obj: any): Record<string, any> {
+    const result = {};
+    for (const key of this.getIdFieldNames()) {
+      const value = obj[key];
+      if (value === undefined || value === null) {
+        throw new Error(`Primary key field "${key}" is empty or null in entity ${this.repository.metadata.name}`);
+      }
+      result[key] = value;
+    }
+    return result;
+  }
+
+  /**
+   * Build where conditions for composite primary keys
+   */
+  protected buildCompositeKeyWhere(keyValues: Record<string, any>): FindOptionsWhere<TEntity> {
+    const where = {} as FindOptionsWhere<TEntity>;
+    for (const [key, value] of Object.entries(keyValues)) {
+      if (!this.getIdFieldNames().includes(key)) {
+        throw new Error(`Invalid primary key field "${key}" for entity ${this.repository.metadata.name}`);
+      }
+      where[key] = value;
+    }
+    return where;
+  }
+
+  /**
+   * Find entity by composite primary key
+   */
+  public async findByCompositeKey(keyValues: Record<string, any>, transaction?: EntityManager): Promise<TEntity | undefined> {
+    return this.withTransaction(async (tx) => {
+      const where = this.buildCompositeKeyWhere(keyValues);
+      const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
+      return repo.findOne({ where });
+    }, transaction);
   }
 
   /**
@@ -243,10 +325,15 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
   }
 
   getId(e: TEntity): any {
-    if (e[this.idFieldName]) {
-      return e[this.idFieldName];
+    if (this.hasCompositeId()) {
+      return this.pickKeysFromObject(e);
     }
-    throw new Error(`Id field "${this.idFieldName}" is empty`)
+    const idFieldName = this.getIdFieldNames()[0];
+    const idValue = e[idFieldName];
+    if (idValue === undefined || idValue === null) {
+      throw new Error(`Primary key field "${idFieldName}" is empty or null in entity ${this.repository.metadata.name}`)
+    }
+    return idValue;
   }
 
   /**
@@ -268,10 +355,24 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
    */
   async delete(ids: any[], transaction?: EntityManager): Promise<number> {
     return this.withTransaction(async (tx) => {
-      // Use tx if available, otherwise use this.repository
       const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
-      const res = await repo.delete(ids);
-      return res.affected || 0;
+      
+      if (this.hasCompositeId()) {
+        // For composite keys, ids should be an array of key objects
+        const whereConditions = ids.map(id => this.buildCompositeKeyWhere(id));
+        let totalAffected = 0;
+        for (const where of whereConditions) {
+          const res = await repo.delete(where);
+          totalAffected += res.affected || 0;
+        }
+        return totalAffected;
+      } else {
+        // For single keys, use In operator for bulk delete
+        const idField = this.getIdFieldNames()[0];
+        const where = { [idField]: In(ids) } as any;
+        const res = await repo.delete(where);
+        return res.affected || 0;
+      }
     }, transaction).then((deletionResult) => {
       // Remove deleted entity IDs from the entityIds array
       this.entityIds = [];

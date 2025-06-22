@@ -167,6 +167,7 @@ const migrationCommands = [
           onDelete: 'CASCADE',
           onUpdate: 'CASCADE',
           allowNull: false,
+          primaryKey: true,
           type: Sequelize.INTEGER,
         },
         follower_id: {
@@ -177,6 +178,7 @@ const migrationCommands = [
           onDelete: 'CASCADE',
           onUpdate: 'CASCADE',
           allowNull: false,
+          primaryKey: true,
           type: Sequelize.INTEGER,
         },
         created_at: {
