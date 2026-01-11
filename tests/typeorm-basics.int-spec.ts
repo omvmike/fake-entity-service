@@ -2,6 +2,8 @@ import {DataSource, Repository} from "typeorm"
 import {FakeUserService} from "./typeorm-factories/fake-user.service";
 import {User} from "./typeorm-models/user.entity";
 import {Role, RoleIds} from "./typeorm-models/role.entity";
+import {Follower} from "./typeorm-models/follower.entity";
+import {FakeFollowerService} from "./typeorm-factories/fake-follower.service";
 import {FakePostService} from "./typeorm-factories/fake-post.service";
 import {Post} from "./typeorm-models/post.entity";
 import {Comment} from "./typeorm-models/comment.entity";
@@ -14,10 +16,11 @@ const PostgresDataSource = new DataSource({
   username: 'tester',
   password: 'test-pwd',
   synchronize: false,
-  entities: [User, Role, Post, Comment],
+  entities: [User, Role, Follower, Post, Comment],
 });
 
 let fakeUserService: FakeUserService;
+let fakeFollowerService: FakeFollowerService;
 let fakePostService: FakePostService;
 let fakeCommentService: FakeCommentService;
 
@@ -26,7 +29,9 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
   beforeAll(async () => {
     await PostgresDataSource.initialize();
     const userRepo = PostgresDataSource.getRepository(User);
+    const followerRepo = PostgresDataSource.getRepository(Follower);
     fakeUserService = new FakeUserService(userRepo);
+    fakeFollowerService = new FakeFollowerService(followerRepo);
     fakePostService = new FakePostService(PostgresDataSource.getRepository(Post));
     fakeCommentService = new FakeCommentService(PostgresDataSource.getRepository(Comment));
   });
@@ -46,6 +51,23 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     expect(user.email).toBeDefined();
     expect(user.firstName).toBeDefined();
     expect(user.lastName).toBeDefined();
+  });
+
+  it('should automatically detect primary key for User entity', () => {
+    expect(fakeUserService.getIdFieldNames()).toEqual(['id']);
+    expect(fakeUserService.hasCompositeId()).toBe(false);
+    
+    const primaryColumns = fakeUserService.getPrimaryColumns();
+    expect(primaryColumns).toHaveLength(1);
+    expect(primaryColumns[0].propertyName).toBe('id');
+  });
+
+  it('should extract single primary key ID correctly', async () => {
+    const user = await fakeUserService.create();
+    const extractedId = fakeUserService.getId(user);
+    
+    expect(extractedId).toBe(user.id);
+    expect(typeof extractedId).toBe('number');
   });
 
   it('should create N users', async () => {
@@ -335,6 +357,74 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     expect(users[2].lastName).toBe('Order2');
   });
 
+  it('should delete entities using automatic primary key detection', async () => {
+    const users = await fakeUserService.createMany(3);
+    expect(users).toHaveLength(3);
+    
+    // Extract IDs using automatic detection
+    const userIds = users.map(user => fakeUserService.getId(user));
+    expect(userIds).toHaveLength(3);
+    userIds.forEach(id => {
+      expect(typeof id).toBe('number');
+      expect(id).toBeGreaterThan(0);
+    });
+    
+    // Delete using detected IDs
+    const deletedCount = await fakeUserService.delete(userIds);
+    expect(deletedCount).toBe(3);
+    
+    // Verify entities are deleted
+    for (const id of userIds) {
+      const found = await fakeUserService.repository.findOne({ where: { id } });
+      expect(found).toBeNull();
+    }
+  });
+
+  it('should handle mixed primary key scenarios across different entities', async () => {
+    // Test User entity (single primary key)
+    const user = await fakeUserService.create();
+    expect(fakeUserService.getIdFieldNames()).toEqual(['id']);
+    expect(fakeUserService.hasCompositeId()).toBe(false);
+    expect(fakeUserService.getId(user)).toBe(user.id);
+    
+    // Test Post entity (single primary key)
+    const post = await fakePostService.create({ userId: user.id, message: 'Test post' });
+    expect(fakePostService.getIdFieldNames()).toEqual(['id']);
+    expect(fakePostService.hasCompositeId()).toBe(false);
+    expect(fakePostService.getId(post)).toBe(post.id);
+    
+    // Test Comment entity (single primary key)
+    const comment = await fakeCommentService.create({ 
+      userId: user.id, 
+      postId: post.id, 
+      message: 'Test comment' 
+    });
+    expect(fakeCommentService.getIdFieldNames()).toEqual(['id']);
+    expect(fakeCommentService.hasCompositeId()).toBe(false);
+    expect(fakeCommentService.getId(comment)).toBe(comment.id);
+    
+    // Cleanup
+    await fakeCommentService.cleanup();
+    await fakePostService.cleanup();
+  });
+
+  it('should validate primary key detection consistency', async () => {
+    // Create multiple users and verify consistent ID extraction
+    const users = await fakeUserService.createMany(5);
+    
+    for (const user of users) {
+      const extractedId = fakeUserService.getId(user);
+      expect(extractedId).toBe(user.id);
+      expect(typeof extractedId).toBe('number');
+      expect(extractedId).toBeGreaterThan(0);
+    }
+    
+    // Verify all IDs are unique
+    const allIds = users.map(user => fakeUserService.getId(user));
+    const uniqueIds = [...new Set(allIds)];
+    expect(uniqueIds).toHaveLength(allIds.length);
+  });
+
   it('should clone service and produce empty state', async () => {
     // Arrange: create a user in the original service
     const user = await fakeUserService.create();
@@ -348,11 +438,293 @@ describe('Test TypeormFakeEntityService can create and cleanup DB entities', () 
     expect(clonedService).not.toBe(fakeUserService);
     expect(clonedService.repository).toBe(fakeUserService.repository);
     expect(clonedService.entityIds.length).toBe(0);
+    
+    // Assert: cloned service should have same primary key detection
+    expect(clonedService.getIdFieldNames()).toEqual(fakeUserService.getIdFieldNames());
+    expect(clonedService.hasCompositeId()).toBe(fakeUserService.hasCompositeId());
 
     // Creating in the clone should not affect the original
     const user2 = await clonedService.createMany(3);
     expect(user2).toBeDefined();
     expect(clonedService.entityIds.length).toBe(3);
     expect(fakeUserService.entityIds.length).toBe(1);
+  });
+
+  describe('EntityIds Management', () => {
+    
+    describe('Single Primary Key Entity (User)', () => {
+      beforeEach(async () => {
+        // Ensure clean state before each test
+        await fakeUserService.cleanup();
+      });
+
+      it('should track entityIds when creating single entities', async () => {
+        expect(fakeUserService.entityIds.length).toBe(0);
+        
+        const user1 = await fakeUserService.create();
+        expect(fakeUserService.entityIds.length).toBe(1);
+        expect(fakeUserService.entityIds[0]).toBe(user1.id);
+        
+        const user2 = await fakeUserService.create();
+        expect(fakeUserService.entityIds.length).toBe(2);
+        expect(fakeUserService.entityIds).toContain(user1.id);
+        expect(fakeUserService.entityIds).toContain(user2.id);
+      });
+
+      it('should track entityIds when creating multiple entities', async () => {
+        expect(fakeUserService.entityIds.length).toBe(0);
+        
+        const users = await fakeUserService.createMany(3);
+        expect(fakeUserService.entityIds.length).toBe(3);
+        
+        users.forEach(user => {
+          expect(fakeUserService.entityIds).toContain(user.id);
+        });
+      });
+
+      it('should remove specific IDs from entityIds when using delete()', async () => {
+        const users = await fakeUserService.createMany(5);
+        expect(fakeUserService.entityIds.length).toBe(5);
+        
+        const idsToDelete = [users[1].id, users[3].id];
+        const deletedCount = await fakeUserService.delete(idsToDelete);
+        
+        expect(deletedCount).toBe(2);
+        expect(fakeUserService.entityIds.length).toBe(3);
+        expect(fakeUserService.entityIds).not.toContain(users[1].id);
+        expect(fakeUserService.entityIds).not.toContain(users[3].id);
+        expect(fakeUserService.entityIds).toContain(users[0].id);
+        expect(fakeUserService.entityIds).toContain(users[2].id);
+        expect(fakeUserService.entityIds).toContain(users[4].id);
+      });
+
+      it('should clear all entityIds when using cleanup()', async () => {
+        const users = await fakeUserService.createMany(4);
+        expect(fakeUserService.entityIds.length).toBe(4);
+        
+        const deletedCount = await fakeUserService.cleanup();
+        
+        expect(deletedCount).toBe(4);
+        expect(fakeUserService.entityIds.length).toBe(0);
+      });
+
+      it('should handle partial deletions correctly', async () => {
+        const users = await fakeUserService.createMany(3);
+        expect(fakeUserService.entityIds.length).toBe(3);
+        
+        // Delete only the first user
+        const deletedCount = await fakeUserService.delete([users[0].id]);
+        
+        expect(deletedCount).toBe(1);
+        expect(fakeUserService.entityIds.length).toBe(2);
+        expect(fakeUserService.entityIds).not.toContain(users[0].id);
+        expect(fakeUserService.entityIds).toContain(users[1].id);
+        expect(fakeUserService.entityIds).toContain(users[2].id);
+      });
+    });
+
+    describe('Composite Primary Key Entity (Follower)', () => {
+      beforeEach(async () => {
+        // Ensure clean state before each test
+        await fakeFollowerService.cleanup();
+        await fakeUserService.cleanup();
+      });
+
+      it('should track composite entityIds when creating entities', async () => {
+        expect(fakeFollowerService.entityIds.length).toBe(0);
+        
+        // Create users for the relationship
+        const users = await fakeUserService.createMany(3);
+        
+        const follower1 = await fakeFollowerService.create({
+          leaderId: users[0].id,
+          followerId: users[1].id
+        });
+        
+        expect(fakeFollowerService.entityIds.length).toBe(1);
+        const expectedId1 = { leaderId: users[0].id, followerId: users[1].id };
+        expect(fakeFollowerService.entityIds[0]).toEqual(expectedId1);
+        
+        const follower2 = await fakeFollowerService.create({
+          leaderId: users[1].id,
+          followerId: users[2].id
+        });
+        
+        expect(fakeFollowerService.entityIds.length).toBe(2);
+        const expectedId2 = { leaderId: users[1].id, followerId: users[2].id };
+        expect(fakeFollowerService.entityIds).toContainEqual(expectedId1);
+        expect(fakeFollowerService.entityIds).toContainEqual(expectedId2);
+      });
+
+      it('should remove specific composite IDs from entityIds when using delete()', async () => {
+        // Create users for the relationships
+        const users = await fakeUserService.createMany(4);
+        
+        // Create follower relationships
+        const follower1 = await fakeFollowerService.create({
+          leaderId: users[0].id,
+          followerId: users[1].id
+        });
+        const follower2 = await fakeFollowerService.create({
+          leaderId: users[1].id,
+          followerId: users[2].id
+        });
+        const follower3 = await fakeFollowerService.create({
+          leaderId: users[2].id,
+          followerId: users[3].id
+        });
+        
+        expect(fakeFollowerService.entityIds.length).toBe(3);
+        
+        // Delete specific composite entities
+        const idsToDelete = [
+          { leaderId: users[0].id, followerId: users[1].id },
+          { leaderId: users[2].id, followerId: users[3].id }
+        ];
+        
+        const deletedCount = await fakeFollowerService.delete(idsToDelete);
+        
+        expect(deletedCount).toBe(2);
+        expect(fakeFollowerService.entityIds.length).toBe(1);
+        expect(fakeFollowerService.entityIds).toContainEqual({
+          leaderId: users[1].id,
+          followerId: users[2].id
+        });
+        expect(fakeFollowerService.entityIds).not.toContainEqual({
+          leaderId: users[0].id,
+          followerId: users[1].id
+        });
+        expect(fakeFollowerService.entityIds).not.toContainEqual({
+          leaderId: users[2].id,
+          followerId: users[3].id
+        });
+      });
+
+      it('should clear all composite entityIds when using cleanup()', async () => {
+        // Create users for the relationships
+        const users = await fakeUserService.createMany(4);
+        
+        // Create multiple follower relationships
+        await fakeFollowerService.create({
+          leaderId: users[0].id,
+          followerId: users[1].id
+        });
+        await fakeFollowerService.create({
+          leaderId: users[1].id,
+          followerId: users[2].id
+        });
+        await fakeFollowerService.create({
+          leaderId: users[2].id,
+          followerId: users[3].id
+        });
+        
+        expect(fakeFollowerService.entityIds.length).toBe(3);
+        
+        const deletedCount = await fakeFollowerService.cleanup();
+        
+        expect(deletedCount).toBe(3);
+        expect(fakeFollowerService.entityIds.length).toBe(0);
+      });
+
+      it('should handle composite key ID matching correctly', async () => {
+        // Create users for the relationships
+        const users = await fakeUserService.createMany(3);
+        
+        const follower1 = await fakeFollowerService.create({
+          leaderId: users[0].id,
+          followerId: users[1].id
+        });
+        const follower2 = await fakeFollowerService.create({
+          leaderId: users[1].id,
+          followerId: users[0].id  // Reversed relationship
+        });
+        
+        expect(fakeFollowerService.entityIds.length).toBe(2);
+        
+        // Delete only the first relationship
+        const deletedCount = await fakeFollowerService.delete([{
+          leaderId: users[0].id,
+          followerId: users[1].id
+        }]);
+        
+        expect(deletedCount).toBe(1);
+        expect(fakeFollowerService.entityIds.length).toBe(1);
+        expect(fakeFollowerService.entityIds).toContainEqual({
+          leaderId: users[1].id,
+          followerId: users[0].id
+        });
+        expect(fakeFollowerService.entityIds).not.toContainEqual({
+          leaderId: users[0].id,
+          followerId: users[1].id
+        });
+      });
+    });
+
+    describe('Mixed Scenarios and Edge Cases', () => {
+      beforeEach(async () => {
+        await fakeUserService.cleanup();
+        await fakeFollowerService.cleanup();
+      });
+
+      it('should handle create/delete cycles correctly', async () => {
+        // First cycle
+        const users1 = await fakeUserService.createMany(2);
+        expect(fakeUserService.entityIds.length).toBe(2);
+        await fakeUserService.cleanup();
+        expect(fakeUserService.entityIds.length).toBe(0);
+        
+        // Second cycle
+        const users2 = await fakeUserService.createMany(3);
+        expect(fakeUserService.entityIds.length).toBe(3);
+        
+        // Partial deletion
+        await fakeUserService.delete([users2[0].id]);
+        expect(fakeUserService.entityIds.length).toBe(2);
+        
+        // Final cleanup
+        await fakeUserService.cleanup();
+        expect(fakeUserService.entityIds.length).toBe(0);
+      });
+
+      it('should not affect entityIds when deletion fails', async () => {
+        const users = await fakeUserService.createMany(2);
+        expect(fakeUserService.entityIds.length).toBe(2);
+        
+        // Try to delete non-existent ID (should not crash)
+        try {
+          await fakeUserService.delete([99999]);
+        } catch (error) {
+          // Expected behavior may vary - some ORMs silently ignore, others throw
+        }
+        
+        // EntityIds should remain intact  
+        expect(fakeUserService.entityIds.length).toBe(2);
+        expect(fakeUserService.entityIds).toContain(users[0].id);
+        expect(fakeUserService.entityIds).toContain(users[1].id);
+      });
+
+      it('should maintain separate entityIds between different services', async () => {
+        const users = await fakeUserService.createMany(2);
+        expect(fakeUserService.entityIds.length).toBe(2);
+        expect(fakeFollowerService.entityIds.length).toBe(0);
+        
+        const follower = await fakeFollowerService.create({
+          leaderId: users[0].id,
+          followerId: users[1].id
+        });
+        
+        expect(fakeUserService.entityIds.length).toBe(2);
+        expect(fakeFollowerService.entityIds.length).toBe(1);
+        
+        // Clean up one service
+        await fakeUserService.cleanup();
+        expect(fakeUserService.entityIds.length).toBe(0);
+        expect(fakeFollowerService.entityIds.length).toBe(1);
+        
+        // Clean up the other service
+        await fakeFollowerService.cleanup();
+        expect(fakeFollowerService.entityIds.length).toBe(0);
+      });
+    });
   });
 });

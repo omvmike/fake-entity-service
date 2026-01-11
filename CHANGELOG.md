@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2025-06-22
+### Added
+- **Composite Primary Key Support**: Full support for multi-column primary keys in both TypeORM and Sequelize
+- **Automatic Primary Key Detection**: Both ORMs now automatically detect primary keys from entity metadata
+  - TypeORM: Reads from `@PrimaryColumn` and `@PrimaryGeneratedColumn` decorators
+  - Sequelize: Uses model's `primaryKeyAttributes` property
+- **Enhanced TypeORM Service**: Complete rewrite of primary key handling with composite key support
+- **New Methods**: Added `findByCompositeKey()`, `hasCompositeId()`, `getIdFieldNames()`, and `getPrimaryColumns()` methods
+- **Improved Error Handling**: Enhanced validation and error messages for primary key operations
+- **Comprehensive Test Coverage**: Added 900+ lines of integration tests covering:
+  - Single and composite primary key detection
+  - CRUD operations with composite keys
+  - Error handling and edge cases
+  - Entity cleanup with composite keys
+
+### Changed
+- **BREAKING**: TypeORM service now uses `idFieldNames: string[]` instead of `idFieldName: string`
+- **BREAKING**: Primary key detection is now automatic; manual override requires `idFieldNames` array
+- **BREAKING**: Minimum TypeORM version bumped to `^0.3.23` (required for composite key bulk delete)
+- **Enhanced**: Improved entity cleanup logic for both single and composite primary keys
+- **Enhanced**: Better error messages with entity name context
+- **Optimized**: Composite key deletion now uses single query instead of N sequential queries
+
+### Fixed
+- Fixed entity cleanup to properly handle composite primary keys
+- Fixed primary key validation to handle null/undefined values
+- Improved transaction handling for composite key operations
+
 ## [0.9.2] - 2025-05-12
 ### Added
 - Introduced the `clone()` method to core and all services, enabling creation of isolated service instances with shared repository and empty state.

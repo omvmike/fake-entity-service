@@ -200,8 +200,8 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
     }
     const idFieldName = this.getIdFieldNames()[0];
     const idValue = e[idFieldName];
-    if (idValue === undefined) {
-      throw new Error(`Id field "${idFieldName}" is empty`)
+    if (idValue === undefined || idValue === null) {
+      throw new Error(`Primary key field "${idFieldName}" is empty or null in entity ${this.repository.name}`);
     }
     return e[this.getIdFieldNames()[0]];
   }
@@ -337,11 +337,25 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
         where,
         transaction: tx,
       });
-    }, transaction).then((deletionResult) => {
+    }, transaction).then((affectedCount) => {
       // Remove deleted entity IDs from the entityIds array
-      this.entityIds = [];
-      return deletionResult;
-    })
+      if (this.hasCompositeId()) {
+        // For composite keys, need deep comparison of objects
+        this.entityIds = this.entityIds.filter(entityId => {
+          return !entityIds.some(deletedId => {
+            // Check if all key fields match
+            return this.getIdFieldNames().every(field => 
+              entityId[field] === deletedId[field]
+            );
+          });
+        });
+      } else {
+        // For single keys, use simple includes
+        this.entityIds = this.entityIds.filter(id => !entityIds.includes(id));
+      }
+      return affectedCount;
+    });
+
   }
 
   /**
@@ -355,9 +369,15 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
    * // Get the first created entity
    * const firstEntity = await fakeUserService.getEntityAt(0);
    */
-  async getEntityAt(index: number, transaction?: Transaction): Promise<TEntity> {
+  async getEntityAt(index: number, transaction?: Transaction): Promise<TEntity | undefined> {
     return this.withTransaction(async (tx) => {
-      const entityId = await this.entityIds.at(index);
+      const entityId = this.entityIds.at(index);
+      if (entityId === undefined) {
+        return undefined;
+      }
+      if (this.hasCompositeId()) {
+        return this.findByCompositeKey(entityId, tx);
+      }
       return this.repository.findByPk(entityId, { transaction: tx });
     }, transaction);
   }
@@ -380,5 +400,33 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
       relationFields
     });
     return this;
+  }
+
+  /**
+   * Build where conditions for composite primary keys
+   */
+  private buildCompositeKeyWhere(keyValues: Record<string, any>): any {
+    const where = {};
+    for (const [key, value] of Object.entries(keyValues)) {
+      if (!this.getIdFieldNames().includes(key)) {
+        throw new Error(`Invalid primary key field "${key}" for entity ${this.repository.name}`);
+      }
+      where[key] = value;
+    }
+    return where;
+  }
+
+  /**
+   * Find entity by composite primary key
+   */
+  public async findByCompositeKey(keyValues: Record<string, any>, transaction?: Transaction): Promise<TEntity | undefined> {
+    return this.withTransaction(async (tx) => {
+      const where = this.buildCompositeKeyWhere(keyValues);
+      const result = await this.repository.findOne({ 
+        where,
+        transaction: tx 
+      });
+      return result || undefined; // Convert null to undefined
+    }, transaction);
   }
 }
