@@ -445,4 +445,182 @@ describe('TypeORM Composite Key Operations', () => {
       }
     });
   });
+
+  describe('Bulk Delete Edge Cases', () => {
+    it('should handle empty ids array gracefully', async () => {
+      const deletedCount = await fakeFollowerService.delete([]);
+      expect(deletedCount).toBe(0);
+    });
+
+    it('should delete single entity by composite key', async () => {
+      const leader = await fakeUserService.create({
+        email: 'single-delete-leader@test.com',
+        firstName: 'Single',
+        lastName: 'Leader',
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followerUser = await fakeUserService.create({
+        email: 'single-delete-follower@test.com',
+        firstName: 'Single',
+        lastName: 'Follower',
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const follower = await fakeFollowerService.create({
+        leaderId: leader.id,
+        followerId: followerUser.id,
+        createdAt: new Date()
+      });
+
+      const compositeId = fakeFollowerService.getId(follower);
+      const deletedCount = await fakeFollowerService.delete([compositeId]);
+
+      expect(deletedCount).toBe(1);
+
+      const found = await fakeFollowerService.findByCompositeKey(compositeId);
+      expect(found).toBeUndefined();
+    });
+
+    it('should delete only specified composite keys and leave others intact', async () => {
+      const leader = await fakeUserService.create({
+        email: 'partial-delete-leader@test.com',
+        firstName: 'Partial',
+        lastName: 'Leader',
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followerUsers = await fakeUserService.createMany(5, {
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followers = await fakeFollowerService
+        .addStates(followerUsers.map(user => ({
+          followerId: user.id,
+        })))
+        .createMany(5, {
+          leaderId: leader.id,
+          createdAt: new Date()
+        });
+
+      // Delete only first 2
+      const idsToDelete = followers.slice(0, 2).map(f => fakeFollowerService.getId(f));
+      const idsToKeep = followers.slice(2).map(f => fakeFollowerService.getId(f));
+
+      const deletedCount = await fakeFollowerService.delete(idsToDelete);
+
+      expect(deletedCount).toBe(2);
+
+      // Verify deleted ones are gone
+      for (const id of idsToDelete) {
+        const found = await fakeFollowerService.findByCompositeKey(id);
+        expect(found).toBeUndefined();
+      }
+
+      // Verify remaining ones still exist
+      for (const id of idsToKeep) {
+        const found = await fakeFollowerService.findByCompositeKey(id);
+        expect(found).toBeDefined();
+      }
+    });
+
+    it('should properly update entityIds array after bulk delete', async () => {
+      // Create a fresh service instance to have clean state
+      const followerRepo = PostgresDataSource.getRepository(Follower);
+      const testFollowerService = new FakeFollowerService(followerRepo);
+
+      const leader = await fakeUserService.create({
+        email: 'entityids-leader@test.com',
+        firstName: 'EntityIds',
+        lastName: 'Leader',
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followerUsers = await fakeUserService.createMany(5, {
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followers = await testFollowerService
+        .addStates(followerUsers.map(user => ({
+          followerId: user.id,
+        })))
+        .createMany(5, {
+          leaderId: leader.id,
+          createdAt: new Date()
+        });
+
+      expect(testFollowerService.entityIds.length).toBe(5);
+
+      // Delete 3 of them
+      const idsToDelete = followers.slice(0, 3).map(f => testFollowerService.getId(f));
+      await testFollowerService.delete(idsToDelete);
+
+      expect(testFollowerService.entityIds.length).toBe(2);
+
+      // Verify remaining entityIds match the ones we kept
+      const remainingIds = followers.slice(3).map(f => testFollowerService.getId(f));
+      for (const remainingId of remainingIds) {
+        const found = testFollowerService.entityIds.find(id =>
+          id.leaderId === remainingId.leaderId && id.followerId === remainingId.followerId
+        );
+        expect(found).toBeDefined();
+      }
+
+      // Cleanup
+      await testFollowerService.cleanup();
+    });
+
+    it('should bulk delete composite keys within transaction', async () => {
+      const leader = await fakeUserService.create({
+        email: 'tx-delete-leader@test.com',
+        firstName: 'Transaction',
+        lastName: 'Leader',
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followerUsers = await fakeUserService.createMany(3, {
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followers = await fakeFollowerService
+        .addStates(followerUsers.map(user => ({
+          followerId: user.id,
+        })))
+        .createMany(3, {
+          leaderId: leader.id,
+          createdAt: new Date()
+        });
+
+      const compositeIds = followers.map(f => fakeFollowerService.getId(f));
+
+      await PostgresDataSource.transaction(async (transactionEntityManager) => {
+        const deletedCount = await fakeFollowerService.delete(compositeIds, transactionEntityManager);
+        expect(deletedCount).toBe(3);
+      });
+
+      // Verify all are deleted after transaction
+      for (const id of compositeIds) {
+        const found = await fakeFollowerService.findByCompositeKey(id);
+        expect(found).toBeUndefined();
+      }
+    });
+
+    it('should handle deletion of non-existent composite keys', async () => {
+      const nonExistentIds = [
+        { leaderId: 999991, followerId: 999992 },
+        { leaderId: 999993, followerId: 999994 },
+      ];
+
+      const deletedCount = await fakeFollowerService.delete(nonExistentIds);
+      expect(deletedCount).toBe(0);
+    });
+  });
 });

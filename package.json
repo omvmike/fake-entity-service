@@ -34,12 +34,12 @@
     "ts-loader": "^9.2.3",
     "ts-node": "^10.0.0",
     "tsconfig-paths": "^3.10.1",
-    "typeorm": "^0.3.11",
+    "typeorm": "^0.3.23",
     "typescript": "^4.3.5"
   },
   "peerDependencies": {
     "sequelize": "6.29.0",
-    "typeorm": "^0.3.0"
+    "typeorm": "^0.3.23"
   },
   "exports": {
     ".": "./dist/index.js",

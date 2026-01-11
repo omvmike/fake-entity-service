@@ -359,14 +359,11 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
       const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
       
       if (this.hasCompositeId()) {
-        // For composite keys, ids should be an array of key objects
+        // For composite keys, use array of where conditions (requires TypeORM 0.3.23+)
+        if (ids.length === 0) return 0;
         const whereConditions = ids.map(id => this.buildCompositeKeyWhere(id));
-        let totalAffected = 0;
-        for (const where of whereConditions) {
-          const res = await repo.delete(where);
-          totalAffected += res.affected || 0;
-        }
-        return totalAffected;
+        const res = await repo.delete(whereConditions);
+        return res.affected || 0;
       } else {
         // For single keys, use In operator for bulk delete
         const idField = this.getIdFieldNames()[0];

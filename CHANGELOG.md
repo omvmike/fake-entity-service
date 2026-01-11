@@ -20,8 +20,10 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **BREAKING**: TypeORM service now uses `idFieldNames: string[]` instead of `idFieldName: string`
 - **BREAKING**: Primary key detection is now automatic; manual override requires `idFieldNames` array
+- **BREAKING**: Minimum TypeORM version bumped to `^0.3.23` (required for composite key bulk delete)
 - **Enhanced**: Improved entity cleanup logic for both single and composite primary keys
 - **Enhanced**: Better error messages with entity name context
+- **Optimized**: Composite key deletion now uses single query instead of N sequential queries
 
 ### Fixed
 - Fixed entity cleanup to properly handle composite primary keys
