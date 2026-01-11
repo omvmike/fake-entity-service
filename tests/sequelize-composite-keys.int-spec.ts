@@ -443,4 +443,62 @@ describe('Sequelize Composite Key Operations', () => {
       }
     });
   });
+
+  describe('getEntityAt() with Composite Keys', () => {
+    it('should retrieve entity by index with composite key', async () => {
+      const leader = await fakeUserService.create({
+        email: 'getat-leader@test.com',
+        firstName: 'GetAt',
+        lastName: 'Leader',
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const followerUsers = await fakeUserService.createMany(3, {
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const leaderFollowers = await fakeLeaderFollowerService
+        .addStates(followerUsers.map(user => ({
+          followerId: user.id,
+        })))
+        .createMany(3, {
+          leaderId: leader.id,
+          createdAt: new Date()
+        });
+
+      // Get first entity
+      const firstEntity = await fakeLeaderFollowerService.getEntityAt(0);
+      expect(firstEntity).toBeDefined();
+      expect(firstEntity.leaderId).toBe(leaderFollowers[0].leaderId);
+      expect(firstEntity.followerId).toBe(leaderFollowers[0].followerId);
+
+      // Get last entity
+      const lastEntity = await fakeLeaderFollowerService.getEntityAt(2);
+      expect(lastEntity).toBeDefined();
+      expect(lastEntity.leaderId).toBe(leaderFollowers[2].leaderId);
+      expect(lastEntity.followerId).toBe(leaderFollowers[2].followerId);
+    });
+
+    it('should return undefined for out of bounds index', async () => {
+      const entity = await fakeLeaderFollowerService.getEntityAt(999);
+      expect(entity).toBeUndefined();
+    });
+
+    it('should work with single key entity (User)', async () => {
+      const users = await fakeUserService.createMany(3, {
+        password: 'password',
+        roleId: createdRoleIds.customer
+      });
+
+      const firstUser = await fakeUserService.getEntityAt(0);
+      expect(firstUser).toBeDefined();
+      expect(firstUser.id).toBe(users[0].id);
+
+      const lastUser = await fakeUserService.getEntityAt(2);
+      expect(lastUser).toBeDefined();
+      expect(lastUser.id).toBe(users[2].id);
+    });
+  });
 });

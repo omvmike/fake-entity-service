@@ -391,6 +391,33 @@ export class TypeormFakeEntityService<TEntity> extends FakeEntityCoreService<TEn
     });
   }
 
+  /**
+   * Retrieves an entity at the specified index from the entityIds array
+   *
+   * @param index - Index in the entityIds array
+   * @param transaction - Optional EntityManager for transaction support
+   * @returns The entity at the specified index
+   *
+   * @example
+   * // Get the first created entity
+   * const firstEntity = await fakeUserService.getEntityAt(0);
+   */
+  async getEntityAt(index: number, transaction?: EntityManager): Promise<TEntity | undefined> {
+    return this.withTransaction(async (tx) => {
+      const entityId = this.entityIds.at(index);
+      if (entityId === undefined) {
+        return undefined;
+      }
+      if (this.hasCompositeId()) {
+        return this.findByCompositeKey(entityId, tx);
+      }
+      const repo = tx ? tx.getRepository(this.repository.target) : this.repository;
+      const idField = this.getIdFieldNames()[0];
+      const result = await repo.findOne({ where: { [idField]: entityId } as any });
+      return result || undefined;
+    }, transaction);
+  }
+
   public withParent(fakeParentService: TypeormFakeEntityService<any>, relationFields: SingleKeyRelation | MultipleKeyRelations, each = false, customFields?: any): TypeormFakeEntityService<TEntity> {
     this.parentEntities.push({
       service: fakeParentService,

@@ -369,9 +369,15 @@ export class SequelizeFakeEntityService<TEntity extends Model> extends FakeEntit
    * // Get the first created entity
    * const firstEntity = await fakeUserService.getEntityAt(0);
    */
-  async getEntityAt(index: number, transaction?: Transaction): Promise<TEntity> {
+  async getEntityAt(index: number, transaction?: Transaction): Promise<TEntity | undefined> {
     return this.withTransaction(async (tx) => {
-      const entityId = await this.entityIds.at(index);
+      const entityId = this.entityIds.at(index);
+      if (entityId === undefined) {
+        return undefined;
+      }
+      if (this.hasCompositeId()) {
+        return this.findByCompositeKey(entityId, tx);
+      }
       return this.repository.findByPk(entityId, { transaction: tx });
     }, transaction);
   }
