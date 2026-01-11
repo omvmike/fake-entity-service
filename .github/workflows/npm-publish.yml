@@ -10,6 +10,7 @@ on:
     tags: [ '*.*.*' ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:  # Allows manual triggering from any branch
 
 jobs:
   build-and-test:
