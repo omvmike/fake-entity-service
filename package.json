@@ -28,7 +28,7 @@
     "ts-jest": "^29.3.2",
     "pg": "^8.8.0",
     "reflect-metadata": "^0.1.13",
-    "sequelize": "^6.29.0",
+    "sequelize": "^6.37.0",
     "sequelize-cli": "^6.4.1",
     "sequelize-typescript": "2.1.6",
     "ts-loader": "^9.2.3",
@@ -38,7 +38,7 @@
     "typescript": "^4.3.5"
   },
   "peerDependencies": {
-    "sequelize": "6.29.0",
+    "sequelize": "^6.29.0",
     "typeorm": "^0.3.23"
   },
   "exports": {

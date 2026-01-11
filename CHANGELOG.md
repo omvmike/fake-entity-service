@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - **Enhanced**: Improved entity cleanup logic for both single and composite primary keys
 - **Enhanced**: Better error messages with entity name context
 - **Optimized**: Composite key deletion now uses single query instead of N sequential queries
+- **Relaxed**: Sequelize peer dependency changed from exact `6.29.0` to `^6.29.0` for greater flexibility
 
 ### Fixed
 - Fixed entity cleanup to properly handle composite primary keys
