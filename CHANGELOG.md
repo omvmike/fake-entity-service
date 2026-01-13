@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.3] - 2026-01-13
+### Changed
+- **CI Improvements**: Updated GitHub Actions workflow
+  - Upgraded PostgreSQL from 14-alpine to 17-alpine
+  - Added Node.js version matrix testing (20, 22, 24)
+  - Updated triggers from `master` to `main` branch with PR support
+  - Added `workflow_dispatch` for manual CI triggers on any branch
+  - Updated actions from v3 to v4
+  - Added publish guard to only run on release tags
+
 ## [0.10.0] - 2025-06-22
 ### Added
 - **Composite Primary Key Support**: Full support for multi-column primary keys in both TypeORM and Sequelize
