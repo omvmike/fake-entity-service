@@ -5,17 +5,18 @@ name: Node.js Package
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
     # Publish semver tags as releases.
     tags: [ '*.*.*' ]
-  release:
-    types: [created]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual triggering from any branch
 
 jobs:
   build-and-test:
     services:
       postgres:
-        image: postgres:14-alpine
+        image: postgres:17-alpine
         env:
           POSTGRES_USER: tester
           POSTGRES_PASSWORD: test-pwd
@@ -28,11 +29,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
       - run: npm ci
       - run: npm run migrate
       - run: npm run seed
@@ -41,6 +45,7 @@ jobs:
   publish-npm:
     needs: build-and-test
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     permissions:
       contents: read
       id-token: write  # Required for npm OIDC trusted publishing

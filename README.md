@@ -42,7 +42,7 @@ npm install fake-entity-service typeorm
 | ORM | Minimum Version |
 |-----|-----------------|
 | TypeORM | `^0.3.23` (required for composite key bulk delete support) |
-| Sequelize | `6.29.0` |
+| Sequelize | `^6.29.0` |
 
 ## Usage
 
